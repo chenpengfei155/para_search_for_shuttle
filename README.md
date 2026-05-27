@@ -33,7 +33,7 @@
 - 公钥尺寸（Public Key Size）
 - 签名尺寸（Signature Size）
 - 组合尺寸（Combined Size）
+- LWE_security_bit 
+- SIS_UF_security_bit 
+- SIS_sUF_security_bit
 
-并将计算结果与预期值进行比较。
-
-最后，算法会输出对应的安全性估计结果，用于评估参数配置的安全强度。
