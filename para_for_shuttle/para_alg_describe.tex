@@ -1,0 +1,169 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{fontspec}
+\usepackage{amsmath,amssymb,booktabs}
+
+\setmainfont{Latin Modern Roman}
+\newfontfamily\zhfont[BoldFont={Droid Sans Fallback}]{Droid Sans Fallback}
+\newcommand{\zh}[1]{{\zhfont #1}}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\emergencystretch=2em
+
+\begin{document}
+
+\begin{center}
+{\LARGE \zh{参数生成算法手稿转写}}\\[0.4em]
+{\small \texttt{para\_alg\_impl.py} {\zhfont 为对应 }Python{\zhfont 实现}}
+\end{center}
+
+\section*{\zh{输入}}
+{\zhfont 输入为 $n,q,\ell,m,\sigma,\alpha_h$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
+
+\section*{\zh{算法步骤}}
+\begin{enumerate}
+  \item {\zhfont 若 $n\notin\{256,512,1024\}$，则返回：$n$ 不合法。}
+  \item \[
+    \lambda = \frac{n}{2}.
+  \]
+  \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
+  \item {\zhfont 若 $\sigma<0.5$，则返回：$\sigma$ 不合法，离散高斯中分布标准差太小。}
+  \item \[
+    B_k = \sqrt{\ell n\sigma^2 + mn\sigma^2}.
+  \]
+  \item \[
+    \alpha_1 = 2^{\left\lceil \log_2(\sqrt{n}\,\sigma)\right\rceil}.
+  \]
+  \item {\zhfont 根据 $\lambda$ 取不同常数，计算}
+  \[
+    r=
+    \begin{cases}
+      \left\lceil 2.75\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=128,\\[0.5em]
+      \left\lceil 2.78\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=256,\\[0.5em]
+      \left\lceil 2.81\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=512.
+    \end{cases}
+  \]
+  \item \[
+    \mu_s = n\left(\frac{r}{\alpha_1}\right)^2 + \ell nr^2 + mnr^2.
+  \]
+  \item \[
+    V_s = 2n\left(\frac{r}{\alpha_1}\right)^4 + 2\ell nr^4 + 2mnr^4.
+  \]
+  \item \[
+    B_s = \sqrt{\mu_s + 6.13\sqrt{V_s}}.
+  \]
+  \item \[
+    B_v = B_s + \sqrt{nm}\left(\frac{\alpha_h}{4}+1\right).
+  \]
+  \item {\zhfont 若 $2r/\alpha_h < 0.05$，则返回：$\alpha_h$ 太大，请调整。}
+  \item {\zhfont 若 $\alpha_h$ 不是 $2$ 的幂次，则返回：$\alpha_h$ 不是 $2$ 的幂次。}
+\end{enumerate}
+
+\section*{\zh{参数对象构造}}
+\[
+\begin{aligned}
+\texttt{LWE\_para} ={}& \texttt{LWEParameters}(\ell n,\ q,\ X_s=\mathrm{D}_\sigma,\ X_e=\mathrm{D}_\sigma, \\
+& mn,\ \texttt{tag}=\texttt{None}).
+\end{aligned}
+\]
+\[
+\begin{aligned}
+\texttt{SIS\_UF\_para} ={}& \texttt{SISParameters}(mn,\ q,\ \texttt{length\_bound}=B_v, \\
+& (\ell+1+m)n,\ \texttt{norm}=2,\ \texttt{tag}=\texttt{None}).
+\end{aligned}
+\]
+\[
+\begin{aligned}
+\texttt{SIS\_sUF\_para} ={}& \texttt{SISParameters}(mn,\ q,\ \texttt{length\_bound}=2B_v, \\
+& (\ell+1+m)n,\ \texttt{norm}=2,\ \texttt{tag}=\texttt{None}).
+\end{aligned}
+\]
+
+\section*{\zh{尺寸公式}}
+\[
+\mathrm{PkBytes} = \frac{\lambda}{8} + \left\lceil\frac{nm\lceil\log_2 q\rceil}{8}\right\rceil.
+\]
+
+{\zhfont 按图片中的定义，先记}
+
+\[
+\sigma_h := \frac{2r}{\alpha_h}.
+\]
+
+\[
+A_h := 1 + 2e^{-\frac{1}{2\sigma_h^2}} + 2e^{-\frac{2}{\sigma_h^2}}.
+\]
+
+\[
+H_h=
+\begin{cases}
+\dfrac12\log_2\!\left(2\pi e\sigma_h^2\right), & \sigma_h\ge 1,\\[0.9em]
+\log_2 A_h + \dfrac{e^{-\frac{1}{2\sigma_h^2}} + 4e^{-\frac{2}{\sigma_h^2}}}{\sigma_h^2 A_h \ln 2}, & \sigma_h<1,
+\end{cases}
+\]
+
+{\zhfont 因为当前算法里种子贡献写作 $\lambda/8$ 字节，所以与图片中的 }SeedBytes{\zhfont 记号等价地写成，并对最终字节数向上取整：}
+
+\[
+\mathrm{SignBytes} = \left\lceil \frac{\lambda + \dfrac{n}{2}\log_2\!\left(2\pi e\left(\dfrac{r}{\alpha_1}\right)^2\right) + \dfrac{\ell n}{2}\log_2\!\left(2\pi e r^2\right) + nmH_h}{8} \right\rceil.
+\]
+
+\section*{\zh{组合尺寸与安全估计}}
+{\zhfont 继续按图片中的描述，组合尺寸定义为}
+
+\[
+\mathrm{CombinedBytes} = \mathrm{PkBytes} + \mathrm{SignBytes}.
+\]
+
+{\zhfont 安全估计部分按如下方式计算：}
+
+\begin{itemize}
+  \item {\zhfont }\texttt{LWE\_security\_bit}{\zhfont 由 }\texttt{LWE.estimate.rough(LWE\_para, quiet=True)}{\zhfont 给出，取其中两种攻击里最强攻击对应的安全比特。}
+  \item {\zhfont }\texttt{SIS\_UF\_security\_bit}{\zhfont 由 }\texttt{SIS.estimate.rough(SIS\_UF\_para, quiet=True)}{\zhfont 给出，取对应的安全比特。}
+  \item {\zhfont }\texttt{SIS\_sUF\_security\_bit}{\zhfont 由 }\texttt{SIS.estimate.rough(SIS\_sUF\_para, quiet=True)}{\zhfont 给出，取对应的安全比特。}
+\end{itemize}
+
+\section*{\zh{最终输出}}
+{\zhfont 若输入参数合法，则最终输出可概括为如下 }$6${\zhfont 个量：}
+
+\[
+\bigl(\mathrm{LWE\_security\_bit},\ \mathrm{SIS\_UF\_security\_bit},\ \mathrm{SIS\_sUF\_security\_bit},\ \mathrm{PkBytes},\ \mathrm{SignBytes},\ \mathrm{CombinedBytes}\bigr).
+\]
+
+{\zhfont 也可以按图片里的表述写成一句结果说明：输入参数合法，得到如下结果。}
+
+{\small
+\begin{tabular}{@{}l@{}}
+\texttt{LWE\_security\_bit = x,}\\
+\texttt{SIS\_UF\_security\_bit = y,}\\
+\texttt{SIS\_sUF\_security\_bit = z,}\\
+\texttt{PkBytes = a,}\\
+\texttt{SignBytes = b,}\\
+\texttt{CombinedBytes = w.}
+\end{tabular}
+}
+
+
+
+
+
+
+
+
+
+
+
+\section*{\zh{实现说明}}
+{\zhfont 本文对应的 }Python{\zhfont 实现位于 \texttt{para\_alg\_impl.py}。脚本会完成上述合法性检查、推导全部中间量，并在本地存在 }estimator{\zhfont 依赖时构造 }LWEParameters{\zhfont 与 }SISParameters{\zhfont 对象。}
+
+{\zhfont 直接运行示例：}\par
+{\small
+\begin{tabular}{@{}l@{}}
+\texttt{python3 para\_alg\_impl.py --n 256 --q 13313 --l 3 --m 2}\\
+\texttt{--sigma 0.7071067811865476 --alpha-h 128}
+\end{tabular}
+}
+
+\end{document}
