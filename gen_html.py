@@ -226,6 +226,27 @@ async function copySelected() {
 
 document.getElementById('copy-selected').addEventListener('click', copySelected);
 
+function updateTagVisibility() {
+  const checkedTargets = [...document.querySelectorAll('#tag-filter input[data-tag^="target_security="]:checked')]
+    .map(i => parseInt(i.dataset.tag.split('=')[1], 10));
+  const relevantThrs = new Set();
+  for (const ts of checkedTargets) {
+    relevantThrs.add(ts);
+    relevantThrs.add(ts + 5);
+  }
+  for (const label of document.querySelectorAll('#tag-filter label')) {
+    const cb = label.querySelector('input');
+    const t = cb.dataset.tag;
+    let visible = true;
+    if (t.includes('>') && checkedTargets.length > 0) {
+      const thr = parseInt(t.split('>')[1], 10);
+      visible = relevantThrs.has(thr);
+    }
+    label.style.display = visible ? '' : 'none';
+    if (!visible && cb.checked) cb.checked = false;
+  }
+}
+
 const showDerivedCb = document.getElementById('show-derived');
 function applyDerivedVisibility() {
   document.body.classList.toggle('hide-derived', !showDerivedCb.checked);
@@ -236,6 +257,7 @@ document.getElementById('derived-group').addEventListener('click', () => {
   applyDerivedVisibility();
 });
 applyDerivedVisibility();
+updateTagVisibility();
 
 function fmtNum(x, digits = 1) {
   if (x === null || x === undefined || x === '') return '';
@@ -327,6 +349,12 @@ document.addEventListener('change', e => {
     return;
   }
   if (e.target.id === 'header-sel' || e.target.id === 'show-derived') return;
+  if (e.target.matches('#tag-filter input[data-tag^="target_security="]')) {
+    for (const cb of document.querySelectorAll('#tag-filter input')) {
+      if (!cb.dataset.tag.startsWith('target_security=')) cb.checked = false;
+    }
+    updateTagVisibility();
+  }
   if (e.target.matches('input[type=checkbox], input[name=match]')) render();
 });
 render();
