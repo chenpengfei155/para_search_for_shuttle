@@ -16,6 +16,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 def add_estimator_paths() -> None:
     candidates = [
+        SCRIPT_DIR / ".deps" / "lattice-estimator",
         SCRIPT_DIR.parent / ".deps" / "lattice-estimator",
         SCRIPT_DIR.parent.parent / ".deps" / "lattice-estimator",
     ]

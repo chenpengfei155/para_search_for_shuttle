@@ -9,7 +9,7 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 
 TEST_PARAMS = {
     "n": 256,
-    "q": 13312,
+    "q": 13313,
     "ell": 3,
     "m": 2,
     "sigma": 0.7071067811865476,
