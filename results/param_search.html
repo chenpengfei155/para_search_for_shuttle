@@ -339,6 +339,9 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'header-sel' || e.target.id === 'show-derived') return;
   if (e.target.matches('#tag-filter input[data-tag^="target_security="]')) {
+    for (const cb of document.querySelectorAll('#tag-filter input')) {
+      if (!cb.dataset.tag.startsWith('target_security=')) cb.checked = false;
+    }
     updateTagVisibility();
   }
   if (e.target.matches('input[type=checkbox], input[name=match]')) render();

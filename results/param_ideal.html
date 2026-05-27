@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Param Search Results</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; margin: 16px; color: #222; }
+h2 { margin: 0 0 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 12px; padding: 12px; background: #f5f5f7; border: 1px solid #e1e1e6; border-radius: 6px; }
+.controls section { display: flex; flex-direction: column; gap: 6px; }
+.controls strong { font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.controls label { font-size: 13px; margin-right: 10px; cursor: pointer; }
+.tags-group { display: flex; flex-wrap: wrap; gap: 4px 10px; max-width: 760px; }
+.mode-row { font-size: 13px; }
+.summary { margin: 8px 0 12px; font-size: 13px; color: #444; }
+.summary button { font-size: 12px; margin-left: 8px; padding: 2px 8px; cursor: pointer; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 12px; width: 100%; }
+th, td { border: 1px solid #d0d0d4; padding: 4px 8px; text-align: right; white-space: nowrap; }
+th { background: #eee; position: sticky; top: 0; cursor: pointer; user-select: none; font-weight: 600; }
+th.group { background: #dde; cursor: default; font-size: 11px; text-align: center; letter-spacing: 0.04em; }
+th.sort-asc::after  { content: " \25B2"; font-size: 9px; }
+th.sort-desc::after { content: " \25BC"; font-size: 9px; }
+.sep-l { border-left: 2px solid #888; }
+body.hide-derived .col-derived { display: none; }
+th.group.col-derived { cursor: pointer; }
+th.group.col-derived::before { content: "\25BE "; font-size: 10px; }
+tr.failed td { color: #888; background: #fafafa; }
+tr.selected td { background: #fff5cc !important; }
+td.tags   { text-align: left; font-size: 11px; color: #444; max-width: 360px; white-space: normal; }
+td.reason { text-align: left; font-style: italic; color: #b00; max-width: 360px; white-space: normal; }
+th.sel, td.sel { width: 24px; text-align: center; cursor: default; }
+th.sel { background: #dde; }
+#copy-status { margin-left: 8px; font-size: 12px; color: #060; }
+</style>
+</head>
+<body>
+<h2>Param Search Results</h2>
+
+<div class="controls">
+  <section>
+    <strong>Columns</strong>
+    <label><input type="checkbox" id="show-derived" checked> show derived columns</label>
+  </section>
+  <section>
+    <strong>Tags</strong>
+    <div class="mode-row">Match:
+      <label><input type="radio" name="match" value="AND" checked> ALL of selected</label>
+      <label><input type="radio" name="match" value="OR"> ANY of selected</label>
+    </div>
+    <div id="tag-filter" class="tags-group"></div>
+  </section>
+</div>
+
+<div class="summary">
+  Showing <strong id="visible-count">0</strong> / <strong id="total-count">0</strong> records
+  <button id="clear-tags">clear tag selection</button>
+  &nbsp;|&nbsp;
+  Selected: <strong id="selected-count">0</strong>
+  <button id="select-all-visible">select all visible</button>
+  <button id="select-none">deselect all</button>
+  <button id="copy-selected">copy selected JSON</button>
+  <span id="copy-status"></span>
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th class="group"></th>
+      <th class="group" colspan="7">inputs</th>
+      <th class="group sep-l col-derived" colspan="9" id="derived-group">derived</th>
+      <th class="group sep-l" colspan="6">outputs</th>
+      <th class="group sep-l">meta</th>
+    </tr>
+    <tr>
+      <th class="sel" title="select / deselect all visible"><input type="checkbox" id="header-sel"></th>
+      <th data-sort="target_security">target</th>
+      <th data-sort="n">n</th>
+      <th data-sort="q">q</th>
+      <th data-sort="ell">ell</th>
+      <th data-sort="m">m</th>
+      <th data-sort="sigma">sigma</th>
+      <th data-sort="alpha_h">alpha_h</th>
+      <th data-sort="bk" class="sep-l col-derived">bk</th>
+      <th data-sort="alpha_1" class="col-derived">alpha_1</th>
+      <th data-sort="r" class="col-derived">r</th>
+      <th data-sort="mu_s" class="col-derived">mu_s</th>
+      <th data-sort="v_s" class="col-derived">v_s</th>
+      <th data-sort="bs" class="col-derived">bs</th>
+      <th data-sort="bv" class="col-derived">bv</th>
+      <th data-sort="sigma_h" class="col-derived">sigma_h</th>
+      <th data-sort="a_h" class="col-derived">a_h</th>
+      <th data-sort="LWE_security_bit" class="sep-l">LWE</th>
+      <th data-sort="SIS_UF_security_bit">SIS_UF</th>
+      <th data-sort="SIS_sUF_security_bit">SIS_sUF</th>
+      <th data-sort="PkBytes">PkBytes</th>
+      <th data-sort="SignBytes">SignBytes</th>
+      <th data-sort="CombinedBytes">CombinedBytes</th>
+      <th class="sep-l">tags / reason</th>
+    </tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+</div>
+
+<script id="data" type="application/json">[{"inputs": {"n": 256, "q": 17921, "ell": 3, "m": 2, "sigma": 0.8, "alpha_h": 256, "target_security": 128, "bk": 28.62167011199731, "alpha_1": 16, "r": 83, "mu_s": 8824809.0, "v_s": 121493672528.13281, "bs": 3310.8123283030377, "bv": 4781.594433171056, "sigma_h": 0.6484375, "a_h": 1.6261548350239228}, "outputs": {"LWE_security_bit": 134.7668624033579, "SIS_UF_security_bit": 135.78, "SIS_sUF_security_bit": 108.332, "PkBytes": 976, "SignBytes": 1057, "CombinedBytes": 2033}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 28289, "ell": 3, "m": 2, "sigma": 0.95, "alpha_h": 256, "target_security": 128, "bk": 33.988233257996804, "alpha_1": 16, "r": 97, "mu_s": 12052929.0, "v_s": 226635650995.0078, "bs": 3869.2626005469233, "bv": 5340.044705414943, "sigma_h": 0.7578125, "a_h": 1.8988072362580395}, "outputs": {"LWE_security_bit": 133.7616624037748, "SIS_UF_security_bit": 139.576, "SIS_sUF_security_bit": 111.544, "PkBytes": 976, "SignBytes": 1100, "CombinedBytes": 2076}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 28289, "ell": 3, "m": 2, "sigma": 1.0, "alpha_h": 256, "target_security": 128, "bk": 35.77708763999664, "alpha_1": 16, "r": 102, "mu_s": 13327524.0, "v_s": 277103478610.125, "bs": 4068.709126348311, "bv": 5539.491231216331, "sigma_h": 0.796875, "a_h": 1.9958043962585064}, "outputs": {"LWE_security_bit": 136.10441074640866, "SIS_UF_security_bit": 137.82399999999998, "SIS_sUF_security_bit": 110.37599999999999, "PkBytes": 976, "SignBytes": 1114, "CombinedBytes": 2090}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 28289, "ell": 3, "m": 2, "sigma": 1.05, "alpha_h": 128, "target_security": 128, "bk": 37.56594202199647, "alpha_1": 32, "r": 116, "mu_s": 17227044.0, "v_s": 463523764570.125, "bs": 4626.0681069132615, "bv": 5372.772867846255, "sigma_h": 1.8125, "a_h": 3.8056410069394113}, "outputs": {"LWE_security_bit": 138.56796678754364, "SIS_UF_security_bit": 139.284, "SIS_sUF_security_bit": 111.544, "PkBytes": 976, "SignBytes": 1182, "CombinedBytes": 2158}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 28289, "ell": 3, "m": 2, "sigma": 1.05, "alpha_h": 256, "target_security": 128, "bk": 37.56594202199647, "alpha_1": 32, "r": 116, "mu_s": 17227044.0, "v_s": 463523764570.125, "bs": 4626.0681069132615, "bv": 6096.85021178128, "sigma_h": 0.90625, "a_h": 2.2631687229249557}, "outputs": {"LWE_security_bit": 138.56796678754364, "SIS_UF_security_bit": 133.444, "SIS_sUF_security_bit": 107.16399999999999, "PkBytes": 976, "SignBytes": 1116, "CombinedBytes": 2092}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 43649, "ell": 3, "m": 2, "sigma": 1.15, "alpha_h": 256, "target_security": 128, "bk": 41.14365078599613, "alpha_1": 32, "r": 125, "mu_s": 20003906.25, "v_s": 625000119209.2896, "bs": 4984.987184173773, "bv": 6455.769289041792, "sigma_h": 0.9765625, "a_h": 2.429564766050838}, "outputs": {"LWE_security_bit": 133.96141308459033, "SIS_UF_security_bit": 138.992, "SIS_sUF_security_bit": 111.836, "PkBytes": 1040, "SignBytes": 1135, "CombinedBytes": 2175}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 43649, "ell": 3, "m": 2, "sigma": 1.2, "alpha_h": 256, "target_security": 128, "bk": 42.93250516799596, "alpha_1": 32, "r": 129, "mu_s": 21304640.25, "v_s": 708922710576.2505, "bs": 5144.506774067334, "bv": 6615.288878935353, "sigma_h": 1.0078125, "a_h": 2.5016260837091178}, "outputs": {"LWE_security_bit": 135.38714095535386, "SIS_UF_security_bit": 138.11599999999999, "SIS_sUF_security_bit": 110.96, "PkBytes": 1040, "SignBytes": 1148, "CombinedBytes": 2188}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 43649, "ell": 3, "m": 2, "sigma": 1.25, "alpha_h": 256, "target_security": 128, "bk": 44.721359549995796, "alpha_1": 32, "r": 134, "mu_s": 22988169.0, "v_s": 825390073590.6328, "bs": 5343.906261434285, "bv": 6814.688366302304, "sigma_h": 1.046875, "a_h": 2.589806619730801}, "outputs": {"LWE_security_bit": 136.7244142745568, "SIS_UF_security_bit": 136.65599999999998, "SIS_sUF_security_bit": 110.08399999999999, "PkBytes": 1040, "SignBytes": 1158, "CombinedBytes": 2198}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 43649, "ell": 3, "m": 2, "sigma": 1.3, "alpha_h": 256, "target_security": 128, "bk": 46.51021393199563, "alpha_1": 32, "r": 138, "mu_s": 24381081.0, "v_s": 928445453246.8828, "bs": 5503.4258513278455, "bv": 6974.207956195864, "sigma_h": 1.078125, "a_h": 2.658708478599733}, "outputs": {"LWE_security_bit": 138.50837348016097, "SIS_UF_security_bit": 135.78, "SIS_sUF_security_bit": 109.208, "PkBytes": 1040, "SignBytes": 1166, "CombinedBytes": 2206}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 65537, "ell": 3, "m": 2, "sigma": 1.45, "alpha_h": 256, "target_security": 128, "bk": 51.87677707799512, "alpha_1": 32, "r": 152, "mu_s": 29578896.0, "v_s": 1366514989602.0, "bs": 6061.744415955308, "bv": 7532.526520823327, "sigma_h": 1.1875, "a_h": 2.8872081427827117}, "outputs": {"LWE_security_bit": 135.42603920465658, "SIS_UF_security_bit": 139.576, "SIS_sUF_security_bit": 112.71199999999999, "PkBytes": 1104, "SignBytes": 1193, "CombinedBytes": 2297}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 65537, "ell": 3, "m": 2, "sigma": 1.5, "alpha_h": 256, "target_security": 128, "bk": 53.665631459994955, "alpha_1": 32, "r": 157, "mu_s": 31556882.25, "v_s": 1555387691226.602, "bs": 6261.143903322259, "bv": 7731.926008190278, "sigma_h": 1.2265625, "a_h": 2.9637581928062913}, "outputs": {"LWE_security_bit": 136.47731986635375, "SIS_UF_security_bit": 138.408, "SIS_sUF_security_bit": 111.836, "PkBytes": 1104, "SignBytes": 1202, "CombinedBytes": 2306}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter1.jsonl"}, {"inputs": {"n": 256, "q": 98561, "ell": 3, "m": 2, "sigma": 1.5, "alpha_h": 512, "target_security": 128, "bk": 53.665631459994955, "alpha_1": 32, "r": 157, "mu_s": 31556882.25, "v_s": 1555387691226.602, "bs": 6261.143903322259, "bv": 9180.080696060328, "sigma_h": 0.61328125, "a_h": 1.5390897897120817}, "outputs": {"LWE_security_bit": 135.8466550374616, "SIS_UF_security_bit": 138.11599999999999, "SIS_sUF_security_bit": 111.836, "PkBytes": 1104, "SignBytes": 1137, "CombinedBytes": 2241}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 98561, "ell": 3, "m": 2, "sigma": 1.6, "alpha_h": 512, "target_security": 128, "bk": 57.24334022399462, "alpha_1": 32, "r": 166, "mu_s": 35278569.0, "v_s": 1943893198928.1328, "bs": 6620.06298058277, "bv": 9538.999773320838, "sigma_h": 0.6484375, "a_h": 1.6261548350239228}, "outputs": {"LWE_security_bit": 137.97669262243946, "SIS_UF_security_bit": 136.364, "SIS_sUF_security_bit": 110.66799999999999, "PkBytes": 1104, "SignBytes": 1153, "CombinedBytes": 2257}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 98561, "ell": 3, "m": 2, "sigma": 1.7, "alpha_h": 512, "target_security": 128, "bk": 60.821048987994274, "alpha_1": 32, "r": 175, "mu_s": 39207656.25, "v_s": 2401000457954.4067, "bs": 6978.982057843283, "bv": 9897.91885058135, "sigma_h": 0.68359375, "a_h": 1.7137218717978675}, "outputs": {"LWE_security_bit": 139.99542503200195, "SIS_UF_security_bit": 134.904, "SIS_sUF_security_bit": 109.5, "PkBytes": 1104, "SignBytes": 1168, "CombinedBytes": 2272}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 148609, "ell": 3, "m": 2, "sigma": 1.9, "alpha_h": 512, "target_security": 128, "bk": 67.97646651599361, "alpha_1": 32, "r": 194, "mu_s": 48183489.0, "v_s": 3626160041395.008, "bs": 7736.700109837696, "bv": 10655.636902575765, "sigma_h": 0.7578125, "a_h": 1.8988072362580395}, "outputs": {"LWE_security_bit": 137.44114498701467, "SIS_UF_security_bit": 138.7, "SIS_sUF_security_bit": 112.71199999999999, "PkBytes": 1168, "SignBytes": 1196, "CombinedBytes": 2364}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 148609, "ell": 3, "m": 2, "sigma": 2.0, "alpha_h": 512, "target_security": 128, "bk": 71.55417527999327, "alpha_1": 32, "r": 204, "mu_s": 53278884.0, "v_s": 4433642973010.125, "bs": 8135.499084571597, "bv": 11054.435877309666, "sigma_h": 0.796875, "a_h": 1.9958043962585064}, "outputs": {"LWE_security_bit": 138.99200000482378, "SIS_UF_security_bit": 136.94799999999998, "SIS_sUF_security_bit": 111.544, "PkBytes": 1168, "SignBytes": 1210, "CombinedBytes": 2378}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.1, "alpha_h": 512, "target_security": 128, "bk": 75.13188404399294, "alpha_1": 64, "r": 231, "mu_s": 68305415.0625, "v_s": 7289334668655.64, "bs": 9211.713183278183, "bv": 12130.649976016251, "sigma_h": 0.90234375, "a_h": 2.253774333595347}, "outputs": {"LWE_security_bit": 134.3200000066494, "SIS_UF_security_bit": 139.576, "SIS_sUF_security_bit": 113.88, "PkBytes": 1168, "SignBytes": 1211, "CombinedBytes": 2379}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.2, "alpha_h": 512, "target_security": 128, "bk": 78.7095928079926, "alpha_1": 64, "r": 240, "mu_s": 73731600.0, "v_s": 8493465701250.0, "bs": 9570.6110995098, "bv": 12489.547892247869, "sigma_h": 0.9375, "a_h": 2.3377879288393837}, "outputs": {"LWE_security_bit": 135.78000000484352, "SIS_UF_security_bit": 138.408, "SIS_sUF_security_bit": 113.00399999999999, "PkBytes": 1168, "SignBytes": 1221, "CombinedBytes": 2389}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.3, "alpha_h": 512, "target_security": 128, "bk": 82.28730157199226, "alpha_1": 64, "r": 249, "mu_s": 79365155.0625, "v_s": 9840957559873.355, "bs": 9929.509015741418, "bv": 12848.445808479486, "sigma_h": 0.97265625, "a_h": 2.4204687336101585}, "outputs": {"LWE_security_bit": 136.94800001084235, "SIS_UF_security_bit": 137.23999999999998, "SIS_sUF_security_bit": 112.12799999999999, "PkBytes": 1168, "SignBytes": 1230, "CombinedBytes": 2398}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.4, "alpha_h": 512, "target_security": 128, "bk": 85.86501033599193, "alpha_1": 64, "r": 258, "mu_s": 85206080.25, "v_s": 11342761340976.25, "bs": 10288.406931973035, "bv": 13207.343724711103, "sigma_h": 1.0078125, "a_h": 2.5016260837091178}, "outputs": {"LWE_security_bit": 138.40800000553955, "SIS_UF_security_bit": 136.072, "SIS_sUF_security_bit": 111.252, "PkBytes": 1168, "SignBytes": 1244, "CombinedBytes": 2412}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.5, "alpha_h": 256, "target_security": 128, "bk": 89.44271909999159, "alpha_1": 64, "r": 267, "mu_s": 91254375.5625, "v_s": 13010231248854.041, "bs": 10647.304848204654, "bv": 12118.086953072674, "sigma_h": 2.0859375, "a_h": 4.045897283365383}, "outputs": {"LWE_security_bit": 139.86800000244398, "SIS_UF_security_bit": 139.868, "SIS_sUF_security_bit": 113.88, "PkBytes": 1168, "SignBytes": 1317, "CombinedBytes": 2485}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 222977, "ell": 3, "m": 2, "sigma": 2.5, "alpha_h": 512, "target_security": 128, "bk": 89.44271909999159, "alpha_1": 64, "r": 267, "mu_s": 91254375.5625, "v_s": 13010231248854.041, "bs": 10647.304848204654, "bv": 13566.241640942722, "sigma_h": 1.04296875, "a_h": 2.581088722801821}, "outputs": {"LWE_security_bit": 139.86800000244398, "SIS_UF_security_bit": 135.196, "SIS_sUF_security_bit": 110.37599999999999, "PkBytes": 1168, "SignBytes": 1253, "CombinedBytes": 2421}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 334721, "ell": 3, "m": 2, "sigma": 2.5, "alpha_h": 1024, "target_security": 128, "bk": 89.44271909999159, "alpha_1": 64, "r": 267, "mu_s": 91254375.5625, "v_s": 13010231248854.041, "bs": 10647.304848204654, "bv": 16462.55101668282, "sigma_h": 0.521484375, "a_h": 1.3193591925648367}, "outputs": {"LWE_security_bit": 133.4440000111031, "SIS_UF_security_bit": 133.736, "SIS_sUF_security_bit": 109.5, "PkBytes": 1232, "SignBytes": 1185, "CombinedBytes": 2417}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "param_search.jsonl"}, {"inputs": {"n": 256, "q": 1123841, "ell": 4, "m": 2, "sigma": 1.05, "alpha_h": 1024, "target_security": 128, "bk": 41.15142767875739, "alpha_1": 32, "r": 122, "mu_s": 22865545.0, "v_s": 680550885002.6328, "bs": 5284.176344905512, "bv": 11099.42251338368, "sigma_h": 0.23828125, "a_h": 1.0002995923913918}, "outputs": {"LWE_security_bit": 137.0890637727891, "SIS_UF_security_bit": 170.528, "SIS_sUF_security_bit": 139.576, "PkBytes": 1360, "SignBytes": 1293, "CombinedBytes": 2653}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133", "sis_suf>128", "sis_suf>133"], "goals": ["sUF"], "source": "iter7.jsonl"}, {"inputs": {"n": 256, "q": 1123841, "ell": 4, "m": 2, "sigma": 1.1, "alpha_h": 1024, "target_security": 128, "bk": 43.11101947298394, "alpha_1": 32, "r": 127, "mu_s": 24778176.25, "v_s": 799164464175.7505, "bs": 5500.740949204918, "bv": 11315.987117683086, "sigma_h": 0.248046875, "a_h": 1.0005912136663109}, "outputs": {"LWE_security_bit": 139.86800000161756, "SIS_UF_security_bit": 169.35999999999999, "SIS_sUF_security_bit": 138.7, "PkBytes": 1360, "SignBytes": 1303, "CombinedBytes": 2663}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133", "sis_suf>128", "sis_suf>133"], "goals": ["sUF"], "source": "iter7.jsonl"}, {"inputs": {"n": 256, "q": 1500929, "ell": 4, "m": 2, "sigma": 1.05, "alpha_h": 4096, "target_security": 128, "bk": 41.15142767875739, "alpha_1": 32, "r": 122, "mu_s": 22865545.0, "v_s": 680550885002.6328, "bs": 5284.176344905512, "bv": 28477.278767824275, "sigma_h": 0.0595703125, "a_h": 1.0}, "outputs": {"LWE_security_bit": 133.24972283314517, "SIS_UF_security_bit": 134.028, "SIS_sUF_security_bit": 110.96, "PkBytes": 1360, "SignBytes": 1293, "CombinedBytes": 2653}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter7.jsonl"}, {"inputs": {"n": 256, "q": 1500929, "ell": 4, "m": 2, "sigma": 1.1, "alpha_h": 4096, "target_security": 128, "bk": 43.11101947298394, "alpha_1": 32, "r": 127, "mu_s": 24778176.25, "v_s": 799164464175.7505, "bs": 5500.740949204918, "bv": 28693.84337212368, "sigma_h": 0.06201171875, "a_h": 1.0}, "outputs": {"LWE_security_bit": 134.6727902328066, "SIS_UF_security_bit": 133.736, "SIS_sUF_security_bit": 110.66799999999999, "PkBytes": 1360, "SignBytes": 1302, "CombinedBytes": 2662}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter7.jsonl"}, {"inputs": {"n": 256, "q": 1500929, "ell": 4, "m": 2, "sigma": 1.15, "alpha_h": 4096, "target_security": 128, "bk": 45.070611267210474, "alpha_1": 32, "r": 132, "mu_s": 26767620.0, "v_s": 932646372112.125, "bs": 5717.305553504325, "bv": 28910.407976423085, "sigma_h": 0.064453125, "a_h": 1.0}, "outputs": {"LWE_security_bit": 135.89015233276547, "SIS_UF_security_bit": 133.444, "SIS_sUF_security_bit": 110.66799999999999, "PkBytes": 1360, "SignBytes": 1311, "CombinedBytes": 2671}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter7.jsonl"}, {"inputs": {"n": 256, "q": 1500929, "ell": 4, "m": 2, "sigma": 1.2, "alpha_h": 4096, "target_security": 128, "bk": 47.03020306143702, "alpha_1": 32, "r": 137, "mu_s": 28833876.25, "v_s": 1082190081001.4536, "bs": 5933.870157803731, "bv": 29126.97258072249, "sigma_h": 0.06689453125, "a_h": 1.0}, "outputs": {"LWE_security_bit": 137.00045542594657, "SIS_UF_security_bit": 133.152, "SIS_sUF_security_bit": 110.37599999999999, "PkBytes": 1360, "SignBytes": 1320, "CombinedBytes": 2680}, "tags": ["target_security=128", "rough", "lwe>128", "lwe>133", "sis_uf>128", "sis_uf>133"], "goals": ["UF"], "source": "iter7.jsonl"}, {"inputs": {"n": 512, "q": 151553, "ell": 3, "m": 2, "sigma": 1.0, "alpha_h": 1024, "target_security": 256, "bk": 50.59644256269407, "alpha_1": 32, "r": 150, "mu_s": 57611250.0, "v_s": 2592000494384.7656, "bs": 8214.64305777705, "bv": 16438.64305777705, "sigma_h": 0.29296875, "a_h": 1.0059031155037992}, "outputs": {"LWE_security_bit": 262.7823320232149, "SIS_UF_security_bit": 314.484, "SIS_sUF_security_bit": 262.216, "PkBytes": 2336, "SignBytes": 2095, "CombinedBytes": 4431}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261", "sis_suf>256", "sis_suf>261"], "goals": ["sUF"], "source": "iter17.jsonl"}, {"inputs": {"n": 512, "q": 160001, "ell": 3, "m": 2, "sigma": 1.0, "alpha_h": 1024, "target_security": 256, "bk": 50.59644256269407, "alpha_1": 32, "r": 150, "mu_s": 57611250.0, "v_s": 2592000494384.7656, "bs": 8214.64305777705, "bv": 16438.64305777705, "sigma_h": 0.29296875, "a_h": 1.0059031155037992}, "outputs": {"LWE_security_bit": 261.70442351916984, "SIS_UF_security_bit": 316.52799999999996, "SIS_sUF_security_bit": 263.676, "PkBytes": 2336, "SignBytes": 2095, "CombinedBytes": 4431}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261", "sis_suf>256", "sis_suf>261"], "goals": ["sUF"], "source": "iter17.jsonl"}, {"inputs": {"n": 512, "q": 170497, "ell": 3, "m": 2, "sigma": 1.1, "alpha_h": 1024, "target_security": 256, "bk": 55.65608681896348, "alpha_1": 32, "r": 164, "mu_s": 68867208.0, "v_s": 3703782164360.25, "bs": 8981.343076502906, "bv": 17205.343076502904, "sigma_h": 0.3203125, "a_h": 1.015296334100424}, "outputs": {"LWE_security_bit": 265.72002235100604, "SIS_UF_security_bit": 314.77599999999995, "SIS_sUF_security_bit": 262.508, "PkBytes": 2336, "SignBytes": 2136, "CombinedBytes": 4472}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261", "sis_suf>256", "sis_suf>261"], "goals": ["sUF"], "source": "iter17.jsonl"}, {"inputs": {"n": 512, "q": 201473, "ell": 3, "m": 2, "sigma": 1.1, "alpha_h": 1024, "target_security": 256, "bk": 55.65608681896348, "alpha_1": 32, "r": 164, "mu_s": 68867208.0, "v_s": 3703782164360.25, "bs": 8981.343076502906, "bv": 17205.343076502904, "sigma_h": 0.3203125, "a_h": 1.015296334100424}, "outputs": {"LWE_security_bit": 261.3607076986578, "SIS_UF_security_bit": 320.616, "SIS_sUF_security_bit": 267.472, "PkBytes": 2336, "SignBytes": 2136, "CombinedBytes": 4472}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261", "sis_suf>256", "sis_suf>261"], "goals": ["sUF"], "source": "iter17.jsonl"}, {"inputs": {"n": 512, "q": 201473, "ell": 3, "m": 2, "sigma": 1.2, "alpha_h": 1024, "target_security": 256, "bk": 60.71573107523288, "alpha_1": 32, "r": 177, "mu_s": 80217904.5, "v_s": 5025312912422.188, "bs": 9693.278808176918, "bv": 17917.278808176918, "sigma_h": 0.345703125, "a_h": 1.030483283867838}, "outputs": {"LWE_security_bit": 266.0174423436809, "SIS_UF_security_bit": 317.11199999999997, "SIS_sUF_security_bit": 264.55199999999996, "PkBytes": 2336, "SignBytes": 2177, "CombinedBytes": 4513}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261", "sis_suf>256", "sis_suf>261"], "goals": ["sUF"], "source": "iter17.jsonl"}, {"inputs": {"n": 512, "q": 393473, "ell": 3, "m": 2, "sigma": 1.55, "alpha_h": 4096, "target_security": 256, "bk": 78.42448597217582, "alpha_1": 64, "r": 242, "mu_s": 149931160.5, "v_s": 17560279740854.844, "bs": 13252.128803080614, "bv": 46052.12880308062, "sigma_h": 0.1181640625, "a_h": 1.0000000000000007}, "outputs": {"LWE_security_bit": 264.18679842167455, "SIS_UF_security_bit": 266.888, "SIS_sUF_security_bit": 225.71599999999998, "PkBytes": 2464, "SignBytes": 2200, "CombinedBytes": 4664}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 393473, "ell": 3, "m": 2, "sigma": 1.6, "alpha_h": 4096, "target_security": 256, "bk": 80.95430810031051, "alpha_1": 64, "r": 248, "mu_s": 157457928.0, "v_s": 19367639352800.25, "bs": 13580.693980016496, "bv": 46380.6939800165, "sigma_h": 0.12109375, "a_h": 1.000000000000003}, "outputs": {"LWE_security_bit": 265.86748132067135, "SIS_UF_security_bit": 266.304, "SIS_sUF_security_bit": 225.42399999999998, "PkBytes": 2464, "SignBytes": 2209, "CombinedBytes": 4673}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 393473, "ell": 3, "m": 2, "sigma": 1.65, "alpha_h": 4096, "target_security": 256, "bk": 83.48413022844521, "alpha_1": 64, "r": 254, "mu_s": 165169024.5, "v_s": 21311049244767.5, "bs": 13909.25915695238, "bv": 46709.25915695238, "sigma_h": 0.1240234375, "a_h": 1.0000000000000153}, "outputs": {"LWE_security_bit": 267.5752541539072, "SIS_UF_security_bit": 265.71999999999997, "SIS_sUF_security_bit": 224.83999999999997, "PkBytes": 2464, "SignBytes": 2218, "CombinedBytes": 4682}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 414209, "ell": 3, "m": 2, "sigma": 1.6, "alpha_h": 4096, "target_security": 256, "bk": 80.95430810031051, "alpha_1": 64, "r": 248, "mu_s": 157457928.0, "v_s": 19367639352800.25, "bs": 13580.693980016496, "bv": 46380.6939800165, "sigma_h": 0.12109375, "a_h": 1.000000000000003}, "outputs": {"LWE_security_bit": 264.8330272514033, "SIS_UF_security_bit": 267.764, "SIS_sUF_security_bit": 226.59199999999998, "PkBytes": 2464, "SignBytes": 2209, "CombinedBytes": 4673}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 414209, "ell": 3, "m": 2, "sigma": 1.65, "alpha_h": 4096, "target_security": 256, "bk": 83.48413022844521, "alpha_1": 64, "r": 254, "mu_s": 165169024.5, "v_s": 21311049244767.5, "bs": 13909.25915695238, "bv": 46709.25915695238, "sigma_h": 0.1240234375, "a_h": 1.0000000000000153}, "outputs": {"LWE_security_bit": 266.48463789759836, "SIS_UF_security_bit": 267.18, "SIS_sUF_security_bit": 226.00799999999998, "PkBytes": 2464, "SignBytes": 2218, "CombinedBytes": 4682}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 414209, "ell": 3, "m": 2, "sigma": 1.7, "alpha_h": 4096, "target_security": 256, "bk": 86.0139523565799, "alpha_1": 64, "r": 261, "mu_s": 174398275.125, "v_s": 23759209965151.85, "bs": 14292.585196710908, "bv": 47092.585196710905, "sigma_h": 0.12744140625, "a_h": 1.0000000000000853}, "outputs": {"LWE_security_bit": 267.96427066721566, "SIS_UF_security_bit": 266.596, "SIS_sUF_security_bit": 225.71599999999998, "PkBytes": 2464, "SignBytes": 2228, "CombinedBytes": 4692}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 512, "q": 425473, "ell": 3, "m": 2, "sigma": 1.7, "alpha_h": 4096, "target_security": 256, "bk": 86.0139523565799, "alpha_1": 64, "r": 261, "mu_s": 174398275.125, "v_s": 23759209965151.85, "bs": 14292.585196710908, "bv": 47092.585196710905, "sigma_h": 0.12744140625, "a_h": 1.0000000000000853}, "outputs": {"LWE_security_bit": 267.4104694600205, "SIS_UF_security_bit": 267.472, "SIS_sUF_security_bit": 226.29999999999998, "PkBytes": 2464, "SignBytes": 2228, "CombinedBytes": 4692}, "tags": ["target_security=256", "rough", "lwe>256", "lwe>261", "sis_uf>256", "sis_uf>261"], "goals": ["UF"], "source": "iter19.jsonl"}, {"inputs": {"n": 1024, "q": 12000257, "ell": 3, "m": 1, "sigma": 0.7, "alpha_h": 256, "target_security": 512, "bk": 44.8, "alpha_1": 32, "r": 137, "mu_s": 76896593.0, "v_s": 2885840445349.8145, "bs": 9343.986882869269, "bv": 11423.986882869269, "sigma_h": 1.0703125, "a_h": 2.6416256143737553}, "outputs": {"LWE_security_bit": 521.804, "SIS_UF_security_bit": 519.468, "SIS_sUF_security_bit": 432.74399999999997, "PkBytes": 3136, "SignBytes": 4381, "CombinedBytes": 7517}, "tags": ["target_security=512", "rough", "lwe>512", "lwe>517", "sis_uf>512", "sis_uf>517"], "goals": ["UF"], "source": "iter9.jsonl"}, {"inputs": {"n": 1024, "q": 326657, "ell": 3, "m": 2, "sigma": 0.7, "alpha_h": 4096, "target_security": 512, "bk": 50.08792269599529, "alpha_1": 32, "r": 151, "mu_s": 116763921.0, "v_s": 5323629569641.564, "bs": 11441.488760554848, "bv": 57827.69360639237, "sigma_h": 0.07373046875, "a_h": 1.0}, "outputs": {"LWE_security_bit": 518.0081090195355, "SIS_UF_security_bit": 607.36, "SIS_sUF_security_bit": 520.052, "PkBytes": 4928, "SignBytes": 4179, "CombinedBytes": 9107}, "tags": ["target_security=512", "rough", "lwe>512", "lwe>517", "sis_uf>512", "sis_uf>517", "sis_suf>512", "sis_suf>517"], "goals": ["sUF"], "source": "iter10.jsonl"}]</script>
+<script>
+const records = JSON.parse(document.getElementById('data').textContent);
+records.forEach((r, i) => { r._idx = i; });
+const selected = new Set();
+
+const allTags = new Set();
+for (const r of records) {
+  for (const t of (r.tags || [])) allTags.add(t);
+}
+
+// Sort tags so target_security=* comes first, then rough, then lwe>*, sis_uf>*, sis_suf>*
+function tagSortKey(t) {
+  if (t.startsWith('target_security=')) return [0, parseInt(t.split('=')[1], 10)];
+  if (t === 'rough') return [1, 0];
+  const order = { 'lwe': 2, 'sis_uf': 3, 'sis_suf': 4 };
+  const [prefix, thr] = t.split('>');
+  return [order[prefix] ?? 99, parseInt(thr, 10) || 0];
+}
+const sortedTags = [...allTags].sort((a, b) => {
+  const [pa, va] = tagSortKey(a), [pb, vb] = tagSortKey(b);
+  return pa !== pb ? pa - pb : va - vb;
+});
+const tagFilterDiv = document.getElementById('tag-filter');
+for (const t of sortedTags) {
+  const safe = t.replace(/[^a-zA-Z0-9]/g, '_');
+  tagFilterDiv.insertAdjacentHTML('beforeend',
+    `<label><input type="checkbox" data-tag="${t}" id="tag-${safe}"> ${t}</label>`);
+}
+
+let sortKey = null, sortAsc = true;
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (sortKey === k) sortAsc = !sortAsc;
+    else { sortKey = k; sortAsc = true; }
+    document.querySelectorAll('th[data-sort]').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+    render();
+  });
+});
+
+document.getElementById('clear-tags').addEventListener('click', () => {
+  document.querySelectorAll('#tag-filter input:checked').forEach(i => i.checked = false);
+  render();
+});
+
+function visibleIndices() {
+  return [...document.querySelectorAll('#rows input.row-sel')].map(cb => parseInt(cb.dataset.idx, 10));
+}
+
+function updateSelectedCount() {
+  document.getElementById('selected-count').textContent = selected.size;
+  const vis = visibleIndices();
+  const allOn = vis.length > 0 && vis.every(i => selected.has(i));
+  const someOn = vis.some(i => selected.has(i));
+  const hdr = document.getElementById('header-sel');
+  hdr.checked = allOn;
+  hdr.indeterminate = !allOn && someOn;
+}
+
+document.getElementById('select-all-visible').addEventListener('click', () => {
+  for (const i of visibleIndices()) selected.add(i);
+  document.querySelectorAll('#rows input.row-sel').forEach(cb => cb.checked = true);
+  document.querySelectorAll('#rows tr').forEach(tr => tr.classList.add('selected'));
+  updateSelectedCount();
+});
+
+document.getElementById('select-none').addEventListener('click', () => {
+  selected.clear();
+  document.querySelectorAll('#rows input.row-sel').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#rows tr.selected').forEach(tr => tr.classList.remove('selected'));
+  updateSelectedCount();
+});
+
+document.getElementById('header-sel').addEventListener('change', e => {
+  if (e.target.checked) document.getElementById('select-all-visible').click();
+  else document.getElementById('select-none').click();
+});
+
+async function copySelected() {
+  const status = document.getElementById('copy-status');
+  if (selected.size === 0) {
+    status.textContent = 'nothing selected';
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 1500);
+    return;
+  }
+  const items = [...selected].sort((a, b) => a - b).map(i => {
+    const { _idx, ...rest } = records[i];
+    return rest;
+  });
+  const text = JSON.stringify(items, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent = `copied ${items.length} record(s)`;
+  } catch (err) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); status.textContent = `copied ${items.length} (fallback)`; }
+    catch (e2) { status.textContent = 'copy failed; see console'; console.log(text); }
+    ta.remove();
+  }
+  setTimeout(() => { status.textContent = ''; }, 2500);
+}
+
+document.getElementById('copy-selected').addEventListener('click', copySelected);
+
+function updateTagVisibility() {
+  const checkedTargets = [...document.querySelectorAll('#tag-filter input[data-tag^="target_security="]:checked')]
+    .map(i => parseInt(i.dataset.tag.split('=')[1], 10));
+  const relevantThrs = new Set();
+  for (const ts of checkedTargets) {
+    relevantThrs.add(ts);
+    relevantThrs.add(ts + 5);
+  }
+  for (const label of document.querySelectorAll('#tag-filter label')) {
+    const cb = label.querySelector('input');
+    const t = cb.dataset.tag;
+    let visible = true;
+    if (t.includes('>') && checkedTargets.length > 0) {
+      const thr = parseInt(t.split('>')[1], 10);
+      visible = relevantThrs.has(thr);
+    }
+    label.style.display = visible ? '' : 'none';
+    if (!visible && cb.checked) cb.checked = false;
+  }
+}
+
+const showDerivedCb = document.getElementById('show-derived');
+function applyDerivedVisibility() {
+  document.body.classList.toggle('hide-derived', !showDerivedCb.checked);
+}
+showDerivedCb.addEventListener('change', applyDerivedVisibility);
+document.getElementById('derived-group').addEventListener('click', () => {
+  showDerivedCb.checked = !showDerivedCb.checked;
+  applyDerivedVisibility();
+});
+applyDerivedVisibility();
+updateTagVisibility();
+
+function fmtNum(x, digits = 1) {
+  if (x === null || x === undefined || x === '') return '';
+  if (typeof x !== 'number') return String(x);
+  if (Number.isInteger(x)) return String(x);
+  return x.toFixed(digits);
+}
+
+function getField(r, k) {
+  if (r.inputs && k in r.inputs) return r.inputs[k];
+  if (r.outputs && k in r.outputs) return r.outputs[k];
+  return null;
+}
+
+function render() {
+  const checkedTags = [...document.querySelectorAll('#tag-filter input:checked')].map(i => i.dataset.tag);
+  const mode = document.querySelector('input[name=match]:checked').value;
+
+  let rows = records.filter(r => {
+    if (checkedTags.length === 0) return true;
+    const rtags = new Set(r.tags || []);
+    return mode === 'AND'
+      ? checkedTags.every(t => rtags.has(t))
+      : checkedTags.some(t => rtags.has(t));
+  });
+
+  if (sortKey) {
+    rows.sort((a, b) => {
+      const av = getField(a, sortKey), bv = getField(b, sortKey);
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      const cmp = (typeof av === 'number' && typeof bv === 'number') ? av - bv : String(av).localeCompare(String(bv));
+      return cmp * (sortAsc ? 1 : -1);
+    });
+  }
+
+  const html = rows.map(r => {
+    const i = r.inputs || {}, o = r.outputs || {};
+    const failed = !r.outputs;
+    const tail = failed
+      ? `<td class="reason sep-l">${(r.reason || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`
+      : `<td class="tags sep-l">${(r.tags || []).join(', ')}</td>`;
+    const isSelected = selected.has(r._idx);
+    const rowClasses = [failed ? 'failed' : 'ok'];
+    if (isSelected) rowClasses.push('selected');
+    return `<tr class="${rowClasses.join(' ')}">
+      <td class="sel"><input type="checkbox" class="row-sel" data-idx="${r._idx}"${isSelected ? ' checked' : ''}></td>
+      <td>${i.target_security ?? ''}</td>
+      <td>${i.n ?? ''}</td>
+      <td>${i.q ?? ''}</td>
+      <td>${i.ell ?? ''}</td>
+      <td>${i.m ?? ''}</td>
+      <td>${i.sigma ?? ''}</td>
+      <td>${i.alpha_h ?? ''}</td>
+      <td class="sep-l col-derived">${fmtNum(i.bk, 2)}</td>
+      <td class="col-derived">${fmtNum(i.alpha_1, 0)}</td>
+      <td class="col-derived">${fmtNum(i.r, 0)}</td>
+      <td class="col-derived">${fmtNum(i.mu_s, 2)}</td>
+      <td class="col-derived">${fmtNum(i.v_s, 2)}</td>
+      <td class="col-derived">${fmtNum(i.bs, 2)}</td>
+      <td class="col-derived">${fmtNum(i.bv, 2)}</td>
+      <td class="col-derived">${fmtNum(i.sigma_h, 3)}</td>
+      <td class="col-derived">${fmtNum(i.a_h, 3)}</td>
+      <td class="sep-l">${fmtNum(o.LWE_security_bit)}</td>
+      <td>${fmtNum(o.SIS_UF_security_bit)}</td>
+      <td>${fmtNum(o.SIS_sUF_security_bit)}</td>
+      <td>${fmtNum(o.PkBytes, 0)}</td>
+      <td>${fmtNum(o.SignBytes, 0)}</td>
+      <td>${fmtNum(o.CombinedBytes, 0)}</td>
+      ${tail}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rows').innerHTML = html;
+  document.getElementById('visible-count').textContent = rows.length;
+  document.getElementById('total-count').textContent = records.length;
+  updateSelectedCount();
+}
+
+document.addEventListener('change', e => {
+  if (e.target.matches('input.row-sel')) {
+    const idx = parseInt(e.target.dataset.idx, 10);
+    if (e.target.checked) selected.add(idx);
+    else selected.delete(idx);
+    const tr = e.target.closest('tr');
+    if (tr) tr.classList.toggle('selected', e.target.checked);
+    updateSelectedCount();
+    return;
+  }
+  if (e.target.id === 'header-sel' || e.target.id === 'show-derived') return;
+  if (e.target.matches('#tag-filter input[data-tag^="target_security="]')) {
+    for (const cb of document.querySelectorAll('#tag-filter input')) {
+      if (!cb.dataset.tag.startsWith('target_security=')) cb.checked = false;
+    }
+    updateTagVisibility();
+  }
+  if (e.target.matches('input[type=checkbox], input[name=match]')) render();
+});
+render();
+</script>
+</body>
+</html>
