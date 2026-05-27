@@ -15,9 +15,32 @@
 \begin{document}
 
 \begin{center}
-{\LARGE \zh{参数生成算法手稿转写}}\\[0.4em]
+{\LARGE \zh{核心算法描述}}\\[0.4em]
 {\small \texttt{para\_alg\_impl.py} {\zhfont 为对应 }Python{\zhfont 实现}}
 \end{center}
+
+\section*{\zh{引言} / Introduction}
+
+{\zhfont 本节概述 }\texttt{shuttle}{\zhfont 参数搜索算法的目标、输入与输出。}
+
+\begin{itemize}
+  \item {\zhfont 输入参数为 }$q,n,\ell,m,\sigma,\alpha_h${\zhfont 。}
+  \item {\zhfont 算法首先检查输入是否合法。}
+  \item {\zhfont 若输入合法，则计算 }$\mathrm{PkBytes}${\zhfont 、}$\mathrm{SignBytes}$ {\zhfont 和 }$\mathrm{CombinedBytes}${\zhfont 。}
+  \item {\zhfont 随后基于 }LWE{\zhfont 与 }SIS{\zhfont 模型给出相应的安全估计。}
+\end{itemize}
+
+{\zhfont 为保证参数有意义，需要满足以下基本约束：}
+
+\begin{itemize}
+  \item $n$ {\zhfont 取安全参数的 }$2${\zhfont 倍。}
+  \item $q$ {\zhfont 为 }NTT{\zhfont 素域模数。}
+  \item $\sigma > 0.5${\zhfont 。}
+  \item $\alpha_h$ {\zhfont 为 }$2${\zhfont 的幂。}
+\end{itemize}
+
+{\zhfont 下文依次给出算法步骤、参数对象构造、尺寸公式，以及最终输出格式。}
+
 
 \section*{\zh{输入}}
 {\zhfont 输入为 $n,q,\ell,m,\sigma,\alpha_h$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
