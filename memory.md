@@ -96,7 +96,7 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 → 累计省 **1602 字节** 跨 6 个 cell。
 
-→ **252 条候选参数** 在 `results/param_ideal.jsonl`，可通过 `extract_ideal.py` 重新生成。
+→ **142 条候选参数** 在 `results/param_ideal.jsonl`，可通过 `extract_ideal.py` 重新生成。
 
 ---
 
@@ -106,7 +106,7 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 ### 3.1 target=128 (n=256)
 
-#### Goal A (UF) — **46 条命中** ✅
+#### Goal A (UF) — **24 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -123,7 +123,9 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 补充：`iter56-57` 在新规则“`sigma` 步长最小 0.05”下，把更小的 `pk` 桶也补扫完了。`q=2689/3329/3457` 的 12-bit 桶在 `σ=0.50` 时仍有 `LWE=150.964/151.548/155.344`，比目标带上沿高出 `10.964..15.344 bit`；继续下探到 `q=257..1409` 的 9-11 bit 桶后，`LWE` 甚至抬到 `167.6..207.9`，同时 `UF` 只有 `75..112 bit`。因此 `128 / Goal A` 在现有 `(ell,m)=(3,2)` 结构下，所有低于当前 848-byte pk 的桶都可视为已证死。
 
-#### Goal B (sUF) — **73 条命中** ✅
+补充：`iter59` 把 13-bit NTT prime 桶剩余的合法 prime (`q=4481/4993/6529/7297/7937`) 按粗 sigma 网格 (`0.50/0.55`) 全扫了一遍。新增的唯一合法命中是 `q=7937, σ=0.55, α_h=128, Comb=1877`，仍比现最优差 `13B`；最接近的低字节点是 `q=6529, σ=0.50, α_h=128, Comb=1866`，但 `UF=140.160` 仍高出带上沿 `0.160 bit`。因此在“`sigma` 步长最小 0.05”的规则下，13-bit pk 桶剩余 prime 已不足以打穿 `1864` 前沿。
+
+#### Goal B (sUF) — **67 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -136,7 +138,7 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 ### 3.2 target=256 (n=512)
 
-#### Goal A (UF) — **28 条命中** ✅
+#### Goal A (UF) — **20 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -150,7 +152,13 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 补充：`iter54-55` 把真实前沿 `q=57089, α_h=2048` 的 `4055` 桶也钉死了。`σ=0.63520..0.63545` 期间一直保持 `Comb=4055`，但 `LWE` 稳定停在 `260.756`；到了 `σ=0.63550..0.63595`，`SignBytes` 已经跳成 `1979`，`Comb` 先涨到 `4059`，而 `LWE` 仍然没进带。只有到 `σ=0.63600` 才首次命中，因此 `4056-4058` 的过渡带并不存在。
 
-#### Goal B (sUF) — **12 条命中** ✅
+补充：`iter59` 把 16-bit 的 2080-byte pk 桶里 `q<57089` 的 prime (`36097..51713`) 以粗 sigma (`0.50/0.55/0.60/0.65`) 和 `α_h∈{1024,2048}` 重扫了一遍。结果没有新的更优命中；唯一合法命中仍落在已知 `q=57089` 上，但粗网格点 `σ=0.65` 只得到 `Comb=4062`。最佳新 near-miss 是 `q=51713, σ=0.60, α_h=2048, Comb=4038`，然而 `UF=259.004` 仍低 `1.996 bit`；`q=50177/49921` 也分别停在 `258.128/257.836 bit`。这说明在 16-bit 桶内继续下探 `q` 虽能把 sign 压到 `1958`，但 `UF` 掉带的速度更快，`4059` 仍然锁定。
+
+补充：`iter60-61` 把真正的新结构族也系统扫了一遍。结论是：`m=1` 里只有 `(ell,m)=(3,1)` 还算接近，但它在 22-27 bit 的多个 prime q 桶上都塌成了同一条 `~250 bit` 平台，无法再往上抬到目标带。代表性的 best near-miss 包括：`q≈4.2M, σ=0.70, α_h=32, Comb=3767, L/U=249.368/249.952`；`q≈16.78M, σ=1.00, α_h=32, Comb=4012, L/U=249.952/249.952`；`q≈33.56M, σ=1.10, α_h=128, Comb=3987, L/U=245.280/251.996`。更高的 `(4,1)` 在 `iter60` 里直接被子组剪枝为 `LWE` 系统性高于目标带，`(5,1)/(6,1)` 更远。到 `iter61` 为止，可以把 `256 / Goal A` 的 `m=1` 路线视为已证死。
+
+补充：`iter62` 对最后剩下的低字节家族 `(ell,m)=(2,2)` 做了正式扫尾，并顺手带上 `(2,1)` sanity check。结果没有任何命中；`(2,2)` 的最好点也只有 `q=17921, σ=2.00, α_h=128, Comb=4092, L/U=247.032/248.492`，仍差 `13.968 bit`，而更低字节的点例如 `Comb=3964` (`q=17921, σ=2.00, α_h=256`) 反而掉到 `L/U=247.032/244.112`。这说明 `ell=2` 家族即便把 sigma 拉到 `2.5`、q 拉到 23-bit，也无法接近 `4059` 前沿。
+
+#### Goal B (sUF) — **10 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -169,7 +177,7 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 ### 3.3 target=512 (n=1024)
 
-#### Goal A (UF) — **10 条命中** ✅
+#### Goal A (UF) — **9 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -180,7 +188,7 @@ SIS_sUF_security_bit  ≤  SIS_UF_security_bit
 
 **关键**：`m=1` 让 n_sis=1024（vs m=2 的 2048），让 SIS 跳出 inf 区；后续又通过 `q≈8.06M` 的 estimator 台阶把先前 7269 near-miss 推进了目标带。
 
-#### Goal B (sUF) — **多条命中** ✅
+#### Goal B (sUF) — **12 条命中** ✅
 
 | 区 | (ell, m) | q | sigma | alpha_h | 代表点 |
 |---|---|---|---|---|---|
@@ -268,6 +276,8 @@ CombinedBytes = PkBytes + SignBytes
 9. **`t=256 / Goal A` 的 `q=57089, α_h=2048` 16-bit pk 桶**: `4055` sign 桶与 `4059` 命中之间也没有重叠区。LWE 在 `σ=0.6352..0.63595` 上几乎完全平到 `260.756`，sign jump 先于 LWE jump 发生。
 10. **从现在起，`sigma` 的搜索步长最小固定为 `0.05`**: 不再做更细的 `0.01/0.005/0.001` 级微调。后续只允许结构性跳变：换 `q` 桶、换 `α_h`、换 `(ell,m)`，或者在粗 sigma 网格上移动。
 11. **手工列 `q` 窗时，`q ≡ 1 mod (n/2)` 还不够，必须额外检查 primality**: `131329, 131585, ...` 这类 `256k+1` 数里大部分仍是复合数。后续搜索必须只保留真正的 NTT prime；`param_search.py` 现已在启动时强制校验这一点。
+12. **`t=256 / Goal A` 的 `(ell,m)=(3,1)` 路线**: 22-27 bit 的 prime q 桶在粗 sigma 网格下会反复落到同一个 `~250 bit` 平台，典型值是 `LWE≈UF≈249.95`。继续在这条线上换同桶 q 或邻桶 q，只会在 `Comb≈3767..4012` 的近邻里重复看到 `11-16 bit` 的系统性缺口。
+13. **`t=256 / Goal A` 的 `(ell,m)=(2,2)` 路线**: 即便把 `σ` 抬到 `2.0-2.5`、并把 q 拉到 23-bit，最好点也仍停在 `L/U≈247/248`。这条线没有隐藏的高-sigma rebalance，后续无需重扫。
 
 ---
 
@@ -275,7 +285,7 @@ CombinedBytes = PkBytes + SignBytes
 
 ### 7.1 环境
 
-- Python: `/home/jipengzhang/micromamba/envs/py3_sage/bin/python` (内含 sage)
+- Python: `python` (内含 sage)
 - estimator 路径: `.deps/lattice-estimator/`
 - 单次 `compute_parameters` 耗时: 0.1s (overshoot 区) → 80s (在 band 附近"真攻击"区)
 
@@ -298,13 +308,13 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")  # 等 BLAS 线程降为 1
 
 ```bash
 # 跑搜索 (修改 PARAM_GROUPS 后)
-/home/jipengzhang/micromamba/envs/py3_sage/bin/python param_search.py --out results/iterN.jsonl --workers 20
+python param_search.py --out results/iterN.jsonl --workers 20
 
 # 从所有 jsonl 抽出命中目标的参数 → results/param_ideal.jsonl
-/home/jipengzhang/micromamba/envs/py3_sage/bin/python extract_ideal.py
+python extract_ideal.py
 
 # 生成 HTML 可视化 (支持按 tag 过滤 + 行选 + 复制 JSON)
-/home/jipengzhang/micromamba/envs/py3_sage/bin/python gen_html.py
+python gen_html.py
 # → 浏览器打开 results/param_search.html
 ```
 
@@ -347,6 +357,10 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")  # 等 BLAS 线程降为 1
 | 57 | `t=128 GA` 继续补完 9-11 bit pk 桶并正式证死；`t=256 GB` 曾扫描 2336-byte pk 桶下沿并看到 `Comb=4392` near-miss，但后续核对发现该前沿依赖复合数 `q`，因此作废 |
 | 58 | 给 `param_search.py` 加入 prime/NTT 校验后，prime-only 地重扫 256B 的 18-bit 桶底；新增两组合法命中 `q=143617/143873, σ=0.95, α_h=1024, Comb=4413`，但全局最优仍是 `4395` |
 | 50 | t=512 GB 继续下探到 `σ=0.686`，证实 `4164` 同样是宽平台而非孤点；`q=306689..310273` 仍保持 9092，但未掉到更低 sign 桶 |
+| 59 | `t=128 GA / t=256 GA` 重新扫同 pk 的 prime-only 粗 sigma 桶：13-bit 桶新增 `q=7937, σ=0.55, α_h=128, Comb=1877`，16-bit 桶新增 `q=57089, σ=0.65, α_h=2048, Comb=4062`；但两条线都未打穿全局最优，最佳新 near-miss 分别停在 `1866` (`q=6529, σ=0.50`) 与 `4038` (`q=51713, σ=0.60`) |
+| 60 | `t=256 GA` 首次转向全新的 `m=1` 结构族。结果表明只有 `(3,1)` 还勉强接近，best near-miss 为 `q=16777729, σ=1.00, α_h=32, Comb=4012, L/U=249.952/249.952`；`(4,1)` 则被 LWE 子组剪枝直接判出带外上方 |
+| 61 | 围绕 `(3,1)` 把 22-27 bit 的 prime q 桶全部扫完后，确认整条路线卡在 `~250 bit` 平台：23-bit 桶 best `Comb=3767, L/U=249.368/249.952`，25-bit 桶 best `Comb=4012, L/U=249.952/249.952`，26-bit 桶 best `Comb=3987, L/U=245.280/251.996`。无命中，且平台在桶内/跨桶都高度稳定 |
+| 62 | 对 `256 / Goal A` 的最后低字节候选 `(2,2)` 做正式扫尾，并带上 `(2,1)` sanity check。无命中；`(2,2)` 最佳点为 `q=17921, σ=2.00, α_h=128, Comb=4092, L/U=247.032/248.492`，说明 `ell=2` 家族也不足以突破 `4059` |
 
 ---
 
@@ -355,7 +369,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")  # 等 BLAS 线程降为 1
 | 文件 | 含义 |
 |------|------|
 | `results/iterN.jsonl` | 第 N 轮搜索的全部记录 |
-| `results/param_ideal.jsonl` | 所有命中目标的参数（252 条） |
+| `results/param_ideal.jsonl` | 所有命中目标的参数（142 条） |
 | `results/param_search.html` | HTML 可视化（带过滤 / 排序 / 复制） |
 | `memory.md` (本文件) | 累积结论 |
 | `param_search.py` 顶部注释 | 6 cell 最优参数速查表（与本文件同步） |

@@ -7,6 +7,8 @@ import json
 import math
 from pathlib import Path
 
+from result_dedup import pick_plateau_representatives, record_key
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma", "alpha_h")
@@ -585,13 +587,32 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def record_key(record: dict) -> tuple | None:
-    inputs = record.get("inputs")
-    if not isinstance(inputs, dict):
-        return None
-    if not all(field in inputs for field in PARAM_KEY_FIELDS):
-        return None
-    return tuple(inputs[field] for field in PARAM_KEY_FIELDS)
+def dedupe_exact_records(rows: list[dict]) -> list[dict]:
+  seen_keys: set[tuple] = set()
+  unique_rows: list[dict] = []
+  for record in rows:
+    key = record_key(record)
+    if key is not None:
+      if key in seen_keys:
+        continue
+      seen_keys.add(key)
+    unique_rows.append(record)
+  return unique_rows
+
+
+def sort_records(rows: list[dict]) -> list[dict]:
+  return sorted(
+    rows,
+    key=lambda record: (
+      (record.get("inputs") or {}).get("target_security", math.inf),
+      (record.get("inputs") or {}).get("n", math.inf),
+      (record.get("inputs") or {}).get("ell", math.inf),
+      (record.get("inputs") or {}).get("m", math.inf),
+      (record.get("inputs") or {}).get("q", math.inf),
+      (record.get("inputs") or {}).get("sigma", math.inf),
+      (record.get("inputs") or {}).get("alpha_h", math.inf),
+    ),
+  )
 
 
 def in_goal_band(value, lo, hi) -> bool:
@@ -639,12 +660,12 @@ def normalize_json_value(value):
 def render_html_rows(rows: list[dict], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     data_path = out_path.with_suffix(".data.json")
-    sanitized_rows = normalize_json_value(rows)
+    sanitized_rows = normalize_json_value(pick_plateau_representatives(rows))
     data_path.write_text(json.dumps(sanitized_rows, ensure_ascii=False), encoding="utf-8")
 
     html = HTML_TEMPLATE.replace("__DATA_URL__", data_path.name)
     out_path.write_text(html, encoding="utf-8")
-    print(f"wrote {len(rows)} records -> {out_path} (data: {data_path.name})")
+    print(f"wrote {len(sanitized_rows)} records -> {out_path} (data: {data_path.name})")
 
 
 def render_html(in_path: Path, out_path: Path) -> None:
@@ -660,68 +681,62 @@ def should_render_report(jsonl_path: Path) -> bool:
 
 def update_param_all(results_dir: Path, source_rows: dict[Path, list[dict]] | None = None) -> tuple[Path, int]:
   param_all_path = results_dir / "param_all.jsonl"
-  seen_keys: set[tuple] = set()
+  source_iter = source_rows.items() if source_rows is not None else (
+    (jsonl_path, load_jsonl(jsonl_path))
+    for jsonl_path in sorted(results_dir.glob("*.jsonl"))
+  )
 
-  if param_all_path.exists():
-    for record in load_jsonl(param_all_path):
-      key = record_key(record)
-      if key is not None:
-        seen_keys.add(key)
+  all_records: list[dict] = []
+  for jsonl_path, rows in source_iter:
+    if jsonl_path.name in {"param_all.jsonl", "param_ideal.jsonl"}:
+      continue
+    all_records.extend(rows)
 
-  appended = 0
-  with param_all_path.open("a", encoding="utf-8") as out_file:
-    source_iter = source_rows.items() if source_rows is not None else (
-      (jsonl_path, load_jsonl(jsonl_path))
-      for jsonl_path in sorted(results_dir.glob("*.jsonl"))
-    )
-    for jsonl_path, rows in source_iter:
-      if jsonl_path == param_all_path:
-        continue
-      for record in rows:
-        key = record_key(record)
-        if key is None or key in seen_keys:
-          continue
-        out_file.write(json.dumps(normalize_json_value(record), ensure_ascii=False) + "\n")
-        seen_keys.add(key)
-        appended += 1
+  exact_unique = dedupe_exact_records(all_records)
+  collapsed = sort_records(pick_plateau_representatives(exact_unique))
 
-  return param_all_path, appended
+  with param_all_path.open("w", encoding="utf-8") as out_file:
+    for record in collapsed:
+      out_file.write(json.dumps(normalize_json_value(record), ensure_ascii=False) + "\n")
+
+  return param_all_path, len(collapsed)
 
 
 def update_param_ideal(results_dir: Path, source_rows: dict[Path, list[dict]] | None = None) -> tuple[Path, int]:
   param_ideal_path = results_dir / "param_ideal.jsonl"
-  seen_keys: set[tuple] = set()
+  source_iter = source_rows.items() if source_rows is not None else (
+    (jsonl_path, load_jsonl(jsonl_path))
+    for jsonl_path in sorted(results_dir.glob("*.jsonl"))
+  )
 
-  if param_ideal_path.exists():
-    for record in load_jsonl(param_ideal_path):
-      key = record_key(record)
-      if key is not None:
-        seen_keys.add(key)
-
-  appended = 0
-  with param_ideal_path.open("a", encoding="utf-8") as out_file:
-    source_iter = source_rows.items() if source_rows is not None else (
-      (jsonl_path, load_jsonl(jsonl_path))
-      for jsonl_path in sorted(results_dir.glob("*.jsonl"))
-    )
-    for jsonl_path, rows in source_iter:
-      if jsonl_path.name in {"param_all.jsonl", "param_ideal.jsonl"}:
+  seen: dict[tuple, dict] = {}
+  for jsonl_path, rows in source_iter:
+    if jsonl_path.name in {"param_all.jsonl", "param_ideal.jsonl"}:
+      continue
+    for record in rows:
+      goals = detect_goals(record)
+      if not goals:
         continue
-      for record in rows:
-        goals = detect_goals(record)
-        if not goals:
-          continue
-        key = record_key(record)
-        if key is None or key in seen_keys:
-          continue
-        enriched_record = dict(record)
-        enriched_record["goals"] = goals
-        enriched_record["source"] = jsonl_path.name
-        out_file.write(json.dumps(normalize_json_value(enriched_record), ensure_ascii=False) + "\n")
-        seen_keys.add(key)
-        appended += 1
+      key = record_key(record)
+      if key is None:
+        continue
+      if key in seen:
+        merged_goals = set(seen[key].get("goals", []))
+        merged_goals.update(goals)
+        seen[key]["goals"] = sorted(merged_goals)
+        continue
+      enriched_record = dict(record)
+      enriched_record["goals"] = goals
+      enriched_record["source"] = jsonl_path.name
+      seen[key] = enriched_record
 
-  return param_ideal_path, appended
+  collapsed = sort_records(pick_plateau_representatives(list(seen.values())))
+
+  with param_ideal_path.open("w", encoding="utf-8") as out_file:
+    for record in collapsed:
+      out_file.write(json.dumps(normalize_json_value(record), ensure_ascii=False) + "\n")
+
+  return param_ideal_path, len(collapsed)
 
 
 def main() -> None:
@@ -766,9 +781,9 @@ def main() -> None:
           render_html_rows(source_rows[jsonl_path], out_dir / f"{jsonl_path.stem}.html")
 
         param_all_path, appended = update_param_all(in_path, source_rows)
-        print(f"updated {param_all_path} with {appended} new record(s)")
+        print(f"rebuilt {param_all_path} with {appended} record(s)")
         param_ideal_path, ideal_appended = update_param_ideal(in_path, source_rows)
-        print(f"updated {param_ideal_path} with {ideal_appended} new record(s)")
+        print(f"rebuilt {param_ideal_path} with {ideal_appended} record(s)")
         render_html(param_ideal_path, out_dir / "param_ideal.html")
         render_html(param_all_path, out_dir / "param_all.html")
         return

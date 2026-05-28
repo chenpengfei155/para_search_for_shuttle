@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Scan all results/*.jsonl, keep records matching Goal A (LWE & SIS_UF in band)
-or Goal B (LWE & SIS_sUF in band), deduplicate by (n,q,ell,m,sigma,alpha_h),
-and write to results/param_ideal.jsonl. Adds a `goal` tag to each record."""
+or Goal B (LWE & SIS_sUF in band), collapse repeated sigma plateaus, and write
+to results/param_ideal.jsonl. Adds a `goal` tag to each record."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+from result_dedup import pick_plateau_representatives, record_key
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = SCRIPT_DIR / "results"
 OUT_PATH = RESULTS_DIR / "param_ideal.jsonl"
 SOURCE_GLOB = "*.jsonl"
-EXCLUDE_NAMES = {"param_ideal.jsonl"}
+EXCLUDE_NAMES = {"param_all.jsonl", "param_ideal.jsonl"}
 
 GOAL_LO_OFFSET = 5
 GOAL_HI_OFFSET = 12
@@ -19,20 +21,11 @@ GOAL_HI_OFFSET = 12
 
 def in_band(value, lo, hi):
     return value is not None and lo <= value <= hi
-
-
-def params_key(inputs):
-    return (
-        inputs["n"], inputs["q"], inputs["ell"], inputs["m"],
-        float(inputs["sigma"]), inputs["alpha_h"],
-    )
-
-
 def main():
     if not RESULTS_DIR.exists():
         raise SystemExit(f"missing {RESULTS_DIR}")
 
-    seen: dict[tuple, dict] = {}  # key -> enriched record
+    seen: dict[tuple, dict] = {}  # exact input key -> enriched record
 
     for path in sorted(RESULTS_DIR.glob(SOURCE_GLOB)):
         if path.name in EXCLUDE_NAMES:
@@ -65,7 +58,9 @@ def main():
                 if not goals:
                     continue
 
-                k = params_key(i)
+                k = record_key(rec)
+                if k is None:
+                    continue
                 if k in seen:
                     # merge goal tags
                     existing = set(seen[k].get("goals", []))
@@ -77,8 +72,9 @@ def main():
                 enriched["source"] = path.name
                 seen[k] = enriched
 
+    collapsed_records = pick_plateau_representatives(list(seen.values()))
     out_records = sorted(
-        seen.values(),
+        collapsed_records,
         key=lambda r: (r["inputs"]["target_security"], r["inputs"]["n"],
                        r["inputs"]["ell"], r["inputs"]["m"],
                        r["inputs"]["q"], r["inputs"]["sigma"],
