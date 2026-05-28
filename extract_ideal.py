@@ -17,10 +17,20 @@ EXCLUDE_NAMES = {"param_all.jsonl", "param_ideal.jsonl"}
 
 GOAL_LO_OFFSET = 5
 GOAL_HI_OFFSET = 12
+SIGMA_MIN_STEP = 0.05
 
 
 def in_band(value, lo, hi):
     return value is not None and lo <= value <= hi
+
+
+def sigma_on_grid(value: object, step: float = SIGMA_MIN_STEP) -> bool:
+    if not isinstance(value, (int, float)):
+        return False
+    scaled = value / step
+    return abs(scaled - round(scaled)) <= 1e-9
+
+
 def main():
     if not RESULTS_DIR.exists():
         raise SystemExit(f"missing {RESULTS_DIR}")
@@ -43,6 +53,8 @@ def main():
                     continue
                 i = rec.get("inputs") or {}
                 o = rec["outputs"]
+                if not sigma_on_grid(i.get("sigma")):
+                    continue
                 t = i.get("target_security")
                 if t is None:
                     continue
