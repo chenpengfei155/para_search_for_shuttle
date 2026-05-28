@@ -58,29 +58,28 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 #   (Pk=4928 Sign=4164; iter49 pushed the frontier into the next lower sign bucket)
 # ====================================================================
 
+LOW_Q_128_GOAL_B_Q = [4481, 4993, 6529, 7297, 7681, 7937, 9473, 9601]
+DEAD_4392_256_GOAL_B_Q = [133121, 133633, 134401]
+
 PARAM_GROUPS: list[dict] = [
-    # Iter-62: iter60-61 effectively falsified the promising (3,1) family: the
-    # 22-27 bit q buckets all collapse onto a ~250-bit plateau and never enter
-    # the [261,268] band. The remaining low-byte family worth one formal pass is
-    # (ell,m)=(2,2), with (2,1) included as a sanity check.
-    # Hypothesis: if there is still a hidden route below Comb=4059 outside the
-    # known (3,2) optimum, it would have to come from a high-sigma / larger-q
-    # rebalance inside ell=2.
+    # Iter-65: small-step follow-up only.
+    # 1) Formalize the 128/Goal-B 13-bit coarse ridge after discarding the
+    #    sub-0.05 sigma probe file.
+    # 2) Recheck the 256/Goal-B 4392-byte dead line on the exact 0.90 grid so
+    #    the "no overlap" conclusion is backed by a clean jsonl artifact.
     {
-        "target_security": 256, "n": [512],
-        "q":       [9473, 17921, 36097, 65537, 133121, 262657, 524801,
-                     1049089, 2100737, 4201217],
-        "ell":     [2], "m": [2],
-        "sigma":   [0.90, 1.00, 1.10, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50],
-        "alpha_h": [128, 256, 512, 1024, 2048, 4096],
+        "target_security": 128, "n": [256],
+        "q":       LOW_Q_128_GOAL_B_Q,
+        "ell":     [3], "m": [3],
+        "sigma":   [0.55, 0.60, 0.65],
+        "alpha_h": [1024],
     },
     {
         "target_security": 256, "n": [512],
-        "q":       [9473, 17921, 36097, 65537, 133121, 262657, 524801,
-                     1049089, 2100737, 4201217],
-        "ell":     [2], "m": [1],
-        "sigma":   [0.90, 1.00, 1.10, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50],
-        "alpha_h": [128, 256, 512, 1024, 2048, 4096],
+        "q":       DEAD_4392_256_GOAL_B_Q,
+        "ell":     [3], "m": [2],
+        "sigma":   [0.90],
+        "alpha_h": [1024],
     },
 ]
 
