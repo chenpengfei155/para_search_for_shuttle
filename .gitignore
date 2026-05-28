@@ -32,3 +32,8 @@ env/
 *.swp
 *.swo
 .DS_Store
+
+# Iteration artifacts are aggregated into param_all/param_ideal and should stay untracked.
+results/iter*.jsonl
+results/iter*.html
+results/iter*.data.json

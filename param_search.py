@@ -15,8 +15,10 @@ import argparse
 import json
 import os
 import random
-from concurrent.futures import CancelledError, ProcessPoolExecutor, as_completed
+import time
+from concurrent.futures import FIRST_COMPLETED, CancelledError, ProcessPoolExecutor, wait
 from itertools import product
+from math import isqrt
 from pathlib import Path
 
 from tqdm import tqdm
@@ -25,43 +27,47 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 
 
 # ====================================================================
-# CONFIRMED VIABLE ZONES (synced with memory.md "VIABLE ZONES" section)
-# All 6 cells (target × goal) hit. 43 unique ideal params written to
-# results/param_ideal.jsonl. Run `extract_ideal.py` to regenerate.
+# FINAL MIN-Combined per (target, goal) — synced with memory.md & param_ideal.jsonl
+# 250 ideal params total. Run `extract_ideal.py` to regenerate.
+# Sigma-grid rule: never refine sigma with a step smaller than 0.05.
+# Structural jumps in q / alpha_h / (ell,m) remain fair game, but sub-0.05
+# sigma micro-tuning is now treated as search noise and should be rejected.
 #
-# target=128 (n=256) Goal A (UF) ✅ (27 records)
-#   zone1: ell=3 m=2, q∈{17921,28289}, sigma∈[0.80,1.05], alpha_h∈{128,256}
-#   zone2: ell=4 m=2, q=1500929, sigma∈[1.05,1.20], alpha_h=4096
-#   居中代表: q=1500929 ell=4 m=2 sigma=1.10 alpha_h=4096 → LWE=134.67 UF=133.74
+# target=128 (n=256) Goal A (UF) ✅ Comb=1864
+#   q=7681 ell=3 m=2 sigma=0.510 alpha_h=128 → LWE=133.74 UF=139.87
+#   (Pk=848 Sign=1016; q<2^13 signed-int friendly)
 #
-# target=128 (n=256) Goal B (sUF) ✅ (2 records)
-#   ell=4 m=2, q=1123841, sigma∈{1.05,1.10}, alpha_h=1024
-#   居中代表: sigma=1.05 → LWE=137.09 sUF=139.58
+# target=128 (n=256) Goal B (sUF) ✅ Comb=2397
+#   q=349697 ell=4 m=2 sigma=0.527 alpha_h=1024 → LWE=133.15 sUF=133.15
+#   (Pk=1232 Sign=1165; iter35-37 local refinement inside the 19-bit q bucket)
 #
-# target=256 (n=512) Goal A (UF) ✅ (7 records)
-#   ell=3 m=2 alpha_h=4096, q∈{393473,414209,425473}, sigma∈[1.55,1.70]
-#   居中代表: q=414209 sigma=1.70 → LWE=267.96 UF=266.60
+# target=256 (n=512) Goal A (UF) ✅ Comb=4059
+#   q=57089 ell=3 m=2 sigma=0.636 alpha_h=2048 → LWE=261.34 UF=261.34
+#   (Pk=2080 Sign=1979)
 #
-# target=256 (n=512) Goal B (sUF) ✅ (5 records)
-#   ell=3 m=2 alpha_h=1024, q∈{151553,160001,170497,201473}, sigma∈[1.00,1.20]
-#   居中代表: q=201473 sigma=1.20 → LWE=266.02 sUF=264.55
+# target=256 (n=512) Goal B (sUF) ✅ Comb=4395
+#   q=133121 ell=3 m=2 sigma=0.907 alpha_h=1024 → LWE=261.02 sUF=261.05
+#   (Pk=2336 Sign=2059; first hit in the 18-bit q bucket)
 #
-# target=512 (n=1024) Goal A (UF) ✅ (1 record)
-#   q=12000257 ell=3 m=1 sigma=0.70 alpha_h=256 → LWE=521.80 UF=519.47
+# target=512 (n=1024) Goal A (UF) ✅ Comb=7269
+#   q=8058881 ell=3 m=1 sigma=0.6075 alpha_h=256 → LWE=517.13 UF=517.42
+#   (Pk=3008 Sign=4261; iter38 hit along the 8.06M ridge)
 #
-# target=512 (n=1024) Goal B (sUF) ✅ (1 record)
-#   q=326657 ell=3 m=2 sigma=0.70 alpha_h=4096 → LWE=518.01 sUF=520.05
+# target=512 (n=1024) Goal B (sUF) ✅ Comb=9092
+#   q=306689 ell=3 m=2 sigma=0.688 alpha_h=4096 → LWE=519.76 sUF=517.13
+#   (Pk=4928 Sign=4164; iter49 pushed the frontier into the next lower sign bucket)
 # ====================================================================
 
 PARAM_GROUPS: list[dict] = [
-    # Iter-19: pinpoint Goal A. iter18 q=393473 s=1.70 a=4096 → LWE=269.30 UF=265.43 ✅
-    # LWE just 1.3 bits over band. Fine-tune sigma + q in narrow zone.
+    # Iter-58: continue 256/Goal-B on valid 18-bit NTT primes only.
+    # Hypothesis: after discarding the composite-q 4392 near-miss, the best remaining
+    # route is still the floor of the 2336-byte pk bucket on coarse sigma steps.
     {
         "target_security": 256, "n": [512],
-        "q":       [393473, 414209, 425473, 444929, 460289, 471041, 490241, 503297],
+        "q":       [133121, 133633, 134401, 135937, 136193, 138241, 138497, 143617, 143873],
         "ell":     [3], "m": [2],
-        "sigma":   [1.55, 1.60, 1.65, 1.70, 1.75],
-        "alpha_h": [4096],
+        "sigma":   [0.90, 0.95],
+        "alpha_h": [1024],
     },
 ]
 
@@ -74,6 +80,8 @@ TAG_SOURCES = [
 ]
 
 EARLY_STOP_MARGIN = 10_000  # essentially off: rely on sub-group LWE pruning instead
+HEARTBEAT_SECONDS = 10
+SIGMA_MIN_STEP = 0.05
 
 # Sub-group pruning: per (target, ell, m) probe LWE range.
 # After SUB_PROBE_MIN samples in a sub-group, if max(LWE_seen) < target+5 - SUB_PROBE_SLACK
@@ -87,6 +95,48 @@ DERIVED_INPUT_FIELDS = ("bk", "alpha_1", "r", "mu_s", "v_s", "bs", "bv", "sigma_
 
 def thresholds_for(target_security: int) -> list[int]:
     return [target_security, target_security + 5]
+
+
+def validate_sigma_groups() -> None:
+    for group in PARAM_GROUPS:
+        sigma_values = sorted({float(value) for value in group["sigma"]})
+        for left, right in zip(sigma_values, sigma_values[1:]):
+            if right - left < SIGMA_MIN_STEP - 1e-12:
+                raise ValueError(
+                    f"sigma grid too fine for target={group['target_security']}: "
+                    f"{left} -> {right} violates min step {SIGMA_MIN_STEP}"
+                )
+
+
+def is_prime(value: int) -> bool:
+    if value < 2:
+        return False
+    if value % 2 == 0:
+        return value == 2
+    limit = isqrt(value)
+    factor = 3
+    while factor <= limit:
+        if value % factor == 0:
+            return False
+        factor += 2
+    return True
+
+
+def validate_q_groups() -> None:
+    for group in PARAM_GROUPS:
+        for n in group["n"]:
+            ntt_stride = n // 2
+            for q in group["q"]:
+                if q % ntt_stride != 1:
+                    raise ValueError(
+                        f"invalid NTT modulus for target={group['target_security']}: "
+                        f"q={q} is not congruent to 1 mod {ntt_stride}"
+                    )
+                if not is_prime(q):
+                    raise ValueError(
+                        f"invalid NTT prime for target={group['target_security']}: "
+                        f"q={q} is composite"
+                    )
 
 
 def sub_group_key(params: dict) -> tuple:
@@ -221,6 +271,8 @@ def main() -> None:
     if not out_path.is_absolute():
         out_path = Path(__file__).resolve().parent / out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    validate_sigma_groups()
+    validate_q_groups()
     done = load_done(out_path)
 
     all_params = iter_param_combinations()
@@ -255,66 +307,81 @@ def main() -> None:
             group_futures[ts].add(fut)
             sub_futures[sk].add(fut)
 
-        for fut in tqdm(as_completed(futures), total=len(futures), desc="search"):
-            params = futures[fut]
-            ts = params["_target_security"]
-            sk = sub_group_key(params)
-            group_futures[ts].discard(fut)
-            sub_futures[sk].discard(fut)
-            try:
-                rec = fut.result()
-            except CancelledError:
-                continue
-            except Exception as exc:  # noqa: BLE001
-                inputs = {k: params[k] for k in PARAM_KEYS}
-                inputs["target_security"] = ts
-                rec = {
-                    "inputs": inputs,
-                    "reason": repr(exc),
-                    "tags": [f"target_security={ts}", "rough"],
-                }
-            fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
-            outputs = rec.get("outputs")
-            if outputs is not None:
-                lwe = outputs.get("LWE_security_bit")
-                if lwe is not None:
-                    sub_lwe[sk].append(lwe)
-
-                if not group_stopped[ts] and is_early_stop_hit(outputs, ts):
-                    group_stopped[ts] = True
-                    cancelled = 0
-                    for f in list(group_futures[ts]):
-                        if f.cancel():
-                            cancelled += 1
+        pending = set(futures)
+        with tqdm(total=len(futures), desc="search") as progress:
+            while pending:
+                ready, pending = wait(
+                    pending,
+                    timeout=HEARTBEAT_SECONDS,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not ready:
                     tqdm.write(
-                        f"[early-stop] target={ts} all securities > {ts + EARLY_STOP_MARGIN}; "
-                        f"cancelled {cancelled} pending tasks in this target group"
+                        f"[heartbeat] completed={progress.n}/{len(futures)} pending={len(pending)}"
                     )
+                    continue
 
-            # Sub-group pruning by LWE-range probe
-            if (
-                not sub_pruned[sk]
-                and len(sub_lwe[sk]) >= SUB_PROBE_MIN
-            ):
-                lo_goal = ts + 5
-                hi_goal = ts + 12
-                seen_max = max(sub_lwe[sk])
-                seen_min = min(sub_lwe[sk])
-                unreachable_high = seen_max < lo_goal - SUB_PROBE_SLACK
-                unreachable_low = seen_min > hi_goal + SUB_PROBE_SLACK
-                if unreachable_high or unreachable_low:
-                    sub_pruned[sk] = True
-                    cancelled = 0
-                    for f in list(sub_futures[sk]):
-                        if f.cancel():
-                            cancelled += 1
-                    direction = "below" if unreachable_high else "above"
-                    tqdm.write(
-                        f"[sub-prune] target={ts} ell={sk[1]} m={sk[2]} n={sk[3]}: "
-                        f"LWE range [{seen_min:.1f},{seen_max:.1f}] {direction} goal [{lo_goal},{hi_goal}]; "
-                        f"cancelled {cancelled} pending in this sub-group"
-                    )
+                for fut in ready:
+                    progress.update(1)
+                    params = futures[fut]
+                    ts = params["_target_security"]
+                    sk = sub_group_key(params)
+                    group_futures[ts].discard(fut)
+                    sub_futures[sk].discard(fut)
+                    try:
+                        rec = fut.result()
+                    except CancelledError:
+                        continue
+                    except Exception as exc:  # noqa: BLE001
+                        inputs = {k: params[k] for k in PARAM_KEYS}
+                        inputs["target_security"] = ts
+                        rec = {
+                            "inputs": inputs,
+                            "reason": repr(exc),
+                            "tags": [f"target_security={ts}", "rough"],
+                        }
+                    fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+                    outputs = rec.get("outputs")
+                    if outputs is not None:
+                        lwe = outputs.get("LWE_security_bit")
+                        if lwe is not None:
+                            sub_lwe[sk].append(lwe)
+
+                        if not group_stopped[ts] and is_early_stop_hit(outputs, ts):
+                            group_stopped[ts] = True
+                            cancelled = 0
+                            for f in list(group_futures[ts]):
+                                if f.cancel():
+                                    cancelled += 1
+                            tqdm.write(
+                                f"[early-stop] target={ts} all securities > {ts + EARLY_STOP_MARGIN}; "
+                                f"cancelled {cancelled} pending tasks in this target group"
+                            )
+
+                    # Sub-group pruning by LWE-range probe
+                    if (
+                        not sub_pruned[sk]
+                        and len(sub_lwe[sk]) >= SUB_PROBE_MIN
+                    ):
+                        lo_goal = ts + 5
+                        hi_goal = ts + 12
+                        seen_max = max(sub_lwe[sk])
+                        seen_min = min(sub_lwe[sk])
+                        unreachable_high = seen_max < lo_goal - SUB_PROBE_SLACK
+                        unreachable_low = seen_min > hi_goal + SUB_PROBE_SLACK
+                        if unreachable_high or unreachable_low:
+                            sub_pruned[sk] = True
+                            cancelled = 0
+                            for f in list(sub_futures[sk]):
+                                if f.cancel():
+                                    cancelled += 1
+                            direction = "below" if unreachable_high else "above"
+                            tqdm.write(
+                                f"[sub-prune] target={ts} ell={sk[1]} m={sk[2]} n={sk[3]}: "
+                                f"LWE range [{seen_min:.1f},{seen_max:.1f}] {direction} goal [{lo_goal},{hi_goal}]; "
+                                f"cancelled {cancelled} pending in this sub-group"
+                            )
 
 
 if __name__ == "__main__":
