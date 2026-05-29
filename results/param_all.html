@@ -74,6 +74,7 @@ th.sel { background: #dde; }
   <button id="select-all-visible">select all page</button>
   <button id="select-none">deselect all</button>
   <button id="copy-selected">copy selected JSON</button>
+  <button id="delete-selected">delete selected</button>
   <span id="copy-status"></span>
 </div>
 
@@ -142,6 +143,7 @@ th.sel { background: #dde; }
 
 <script>
 const dataUrl = "param_all.data.json";
+const deleteApiUrl = "";
 let records = [];
 const selected = new Set();
 let sortKey = null, sortAsc = true;
@@ -345,6 +347,49 @@ async function copySelected() {
 
 document.getElementById('copy-selected').addEventListener('click', copySelected);
 
+function recordKeyForApi(record) {
+  const i = record.inputs || {};
+  return [i.n, i.q, i.ell, i.m, i.sigma, i.alpha_h];
+}
+
+async function deleteSelected() {
+  const status = document.getElementById('copy-status');
+  if (!deleteApiUrl) {
+    status.textContent = 'delete is unavailable for this report';
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 2000);
+    return;
+  }
+  if (selected.size === 0) {
+    status.textContent = 'nothing selected';
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 1500);
+    return;
+  }
+
+  const keys = [...selected].sort((a, b) => a - b).map(i => recordKeyForApi(records[i]));
+  if (!window.confirm(`Delete ${keys.length} selected record(s)?`)) return;
+
+  try {
+    const response = await fetch(deleteApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    status.textContent = `deleted ${result.removed} record(s), reloading...`;
+    selected.clear();
+    setTimeout(() => { window.location.reload(); }, 250);
+  } catch (err) {
+    status.textContent = `delete failed: ${err}`;
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 2500);
+  }
+}
+
+document.getElementById('delete-selected').addEventListener('click', deleteSelected);
+
 function updateTagVisibility() {
   const checkedTargets = [...document.querySelectorAll('#tag-filter input[data-tag^="target_security="]:checked')]
     .map(i => parseInt(i.dataset.tag.split('=')[1], 10));
@@ -498,6 +543,9 @@ document.addEventListener('change', e => {
 async function init() {
   loadStatus.textContent = 'Loading data...';
   loadStatus.classList.remove('error');
+  if (!deleteApiUrl) {
+    document.getElementById('delete-selected').style.display = 'none';
+  }
   try {
     const response = await fetch(freshDataUrl(), { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

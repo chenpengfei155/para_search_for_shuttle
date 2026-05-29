@@ -731,7 +731,7 @@ def enrich_html_tags(record: dict) -> dict:
   return enriched_record
 
 
-def render_html_rows(rows: list[dict], out_path: Path) -> None:
+def render_html_rows(rows: list[dict], out_path: Path, delete_api_url: str = "") -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     data_path = out_path.with_suffix(".data.json")
     html_rows = [enrich_html_tags(record) for record in pick_plateau_representatives(rows)]
