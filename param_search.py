@@ -31,21 +31,21 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 # Band = [target+5, target+30] (GOAL_HI_OFFSET=30, user 2026-05-29).
 # Sigma-grid rule: sigma_1 and sigma_2 must be multiples of 0.05; no sub-0.05 micro-tuning.
 #
-# --- 2.1 GENERAL (sigma_1,sigma_2>=0.5, on-grid) ---
-# t=128 A Comb=1866  q=4993  ell=3 m=2 s=0.50 a_h=128  L=144.83 UF=134.32 (Pk=848  Sn=1018)
-# t=128 B Comb=2090  q=3329  ell=3 m=3 s=0.55 a_h=512  L=144.81 sUF=135.20 (Pk=1168 Sn=922)
-# t=256 A Comb=3847  q=30977 ell=3 m=2 s=0.50 a_h=1024 L=266.01 UF=282.07 (Pk=1952 Sn=1895)
-# t=256 B Comb=3855  q=32257 ell=3 m=2 s=0.50 a_h=512  L=263.38 sUF=261.63 (Pk=1952 Sn=1903)
-# t=512 A Comb=7170  q=3002369 ell=3 m=1 s=0.50 a_h=128 L=522.68 UF=522.39 (Pk=2880 Sn=4290)
-# t=512 B Comb=9107  q=326657  ell=3 m=2 s=0.70 a_h=4096 L=518.01 sUF=520.05 (Pk=4928 Sn=4179)
+# --- 2.1 GENERAL (min(sigma_1,sigma_2)>=0.5, on-grid) ---
+# t=128 A Comb=1866  q=4993  ell=3 m=2 s1=s2=0.50 a_h=128  L=144.83 UF=134.32 (Pk=848  Sn=1018)
+# t=128 B Comb=2090  q=3329  ell=3 m=3 s1=s2=0.55 a_h=512  L=144.81 sUF=135.20 (Pk=1168 Sn=922)
+# t=256 A Comb=3847  q=30977 ell=3 m=2 s1=s2=0.50 a_h=1024 L=266.01 UF=282.07 (Pk=1952 Sn=1895)
+# t=256 B Comb=3855  q=32257 ell=3 m=2 s1=s2=0.50 a_h=512  L=263.38 sUF=261.63 (Pk=1952 Sn=1903)
+# t=512 A Comb=7170  q=3002369 ell=3 m=1 s1=s2=0.50 a_h=128 L=522.68 UF=522.39 (Pk=2880 Sn=4290)
+# t=512 B Comb=9107  q=326657  ell=3 m=2 s1=s2=0.70 a_h=4096 L=518.01 sUF=520.05 (Pk=4928 Sn=4179)
 #
-# --- 2.2 SIGMA>=1 (hard constraint, on-grid) ---
-# t=128 A Comb=2090  q=28289   ell=3 m=2 s=1.00 a_h=256  L=136.10 UF=137.82 (Pk=976  Sn=1114)
-# t=128 B Comb=2348  q=7681    ell=3 m=3 s=1.00 a_h=512  L=157.68 sUF=143.37 (Pk=1264 Sn=1084)
-# t=256 A Comb=4295  q=130817  ell=3 m=2 s=1.00 a_h=2048 L=267.18 UF=277.98 (Pk=2208 Sn=2087)
-# t=256 B Comb=4431  q=160001  ell=3 m=2 s=1.00 a_h=1024 L=261.70 sUF=263.68 (Pk=2336 Sn=2095)
-# t=512 A Comb=7938  q=32000513 ell=3 m=1 s=1.00 a_h=256 L=534.36 UF=521.22 (Pk=3264 Sn=4674)
-# t=512 B Comb=9343  q=495617  ell=3 m=2 s=1.00 a_h=4096 L=539.03 sUF=533.48 (Pk=4928 Sn=4415)
+# --- 2.2 MIN(SIGMA_1,SIGMA_2)>=1 (hard constraint, on-grid) ---
+# t=128 A Comb=2090  q=28289   ell=3 m=2 s1=s2=1.00 a_h=256  L=136.10 UF=137.82 (Pk=976  Sn=1114)
+# t=128 B Comb=2348  q=7681    ell=3 m=3 s1=s2=1.00 a_h=512  L=157.68 sUF=143.37 (Pk=1264 Sn=1084)
+# t=256 A Comb=4295  q=130817  ell=3 m=2 s1=s2=1.00 a_h=2048 L=267.18 UF=277.98 (Pk=2208 Sn=2087)
+# t=256 B Comb=4431  q=160001  ell=3 m=2 s1=s2=1.00 a_h=1024 L=261.70 sUF=263.68 (Pk=2336 Sn=2095)
+# t=512 A Comb=7938  q=32000513 ell=3 m=1 s1=s2=1.00 a_h=256 L=534.36 UF=521.22 (Pk=3264 Sn=4674)
+# t=512 B Comb=9343  q=495617  ell=3 m=2 s1=s2=1.00 a_h=4096 L=539.03 sUF=533.48 (Pk=4928 Sn=4415)
 # ====================================================================
 
 LOW_Q_128_GOAL_B_Q = [4481, 4993, 6529, 7297, 7681, 7937, 9473, 9601]

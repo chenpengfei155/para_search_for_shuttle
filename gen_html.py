@@ -14,7 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma_1", "sigma_2", "alpha_h")
 GOAL_LO_OFFSET = 5
 GOAL_HI_OFFSET = 30
-SIGMA_AT_LEAST_ONE_TAG = "sigma>=1"
+SIGMA_HARD_CONSTRAINT_TAG = "min(sigma_1,sigma_2)>=1"
 
 HTML_TEMPLATE = r"""<!doctype html>
 <html lang="en">
@@ -186,11 +186,11 @@ function isSecurityThresholdTag(t) {
   return /^(lwe|sis_uf|sis_suf)>\d+$/.test(t);
 }
 
-// Sort tags so target_security=* comes first, then rough, then sigma>=1, then lwe>*, sis_uf>*, sis_suf>*
+// Sort tags so target_security=* comes first, then rough, then min(sigma_1,sigma_2)>=1, then lwe>*, sis_uf>*, sis_suf>*
 function tagSortKey(t) {
   if (t.startsWith('target_security=')) return [0, parseInt(t.split('=')[1], 10)];
   if (t === 'rough') return [1, 0];
-  if (t === 'sigma>=1') return [2, 1];
+  if (t === 'min(sigma_1,sigma_2)>=1') return [2, 1];
   if (isSecurityThresholdTag(t)) {
     const order = { 'lwe': 3, 'sis_uf': 4, 'sis_suf': 5 };
     const [prefix, thr] = t.split('>');
@@ -738,9 +738,20 @@ def normalize_json_value(value):
   return value
 
 
+def normalize_tags(tags: list[str]) -> list[str]:
+  normalized: list[str] = []
+  seen: set[str] = set()
+  for tag in tags:
+    if tag in seen:
+      continue
+    normalized.append(tag)
+    seen.add(tag)
+  return normalized
+
+
 def enrich_html_tags(record: dict) -> dict:
   enriched_record = dict(record)
-  tags = list(enriched_record.get("tags") or [])
+  tags = normalize_tags(list(enriched_record.get("tags") or []))
   inputs = enriched_record.get("inputs")
   sigma_1, sigma_2 = sigma_pair(inputs) if isinstance(inputs, dict) else (None, None)
 
@@ -748,9 +759,9 @@ def enrich_html_tags(record: dict) -> dict:
     isinstance(sigma_1, (int, float))
     and isinstance(sigma_2, (int, float))
     and min(sigma_1, sigma_2) >= 1
-    and SIGMA_AT_LEAST_ONE_TAG not in tags
+    and SIGMA_HARD_CONSTRAINT_TAG not in tags
   ):
-    tags.append(SIGMA_AT_LEAST_ONE_TAG)
+    tags.append(SIGMA_HARD_CONSTRAINT_TAG)
 
   if tags:
     enriched_record["tags"] = tags

@@ -36,7 +36,7 @@
 \begin{itemize}
   \item $n$ {\zhfont 取安全参数的 }$2${\zhfont 倍。}
   \item $q$ {\zhfont 为 }NTT{\zhfont 素域模数。}
-  \item $\sigma_1 > 0.5,\sigma_2 > 0.5${\zhfont 。}
+  \item $\sigma_1 \ge 0.5,\sigma_2 \ge 0.5${\zhfont 。}
   \item $\alpha_h$ {\zhfont 为 }$2${\zhfont 的幂。}
 \end{itemize}
 
@@ -44,7 +44,7 @@
 
 
 \section*{\zh{输入}}
-{\zhfont 输入为 $n,q,\ell,m,\sigma,\alpha_h$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
+{\zhfont 输入为 $n,q,\ell,m,\sigma_1,\sigma_2,\alpha_h$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
 
 \section*{\zh{算法步骤}}
 \begin{enumerate}
@@ -53,7 +53,7 @@
     \lambda = \frac{n}{2}.
   \]
   \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
-  \item {\zhfont 若 $\sigma<0.5$，则返回：$\sigma$ 不合法，离散高斯中分布标准差太小。}
+  \item {\zhfont 若 $\sigma_1<0.5$ 或 $\sigma_2<0.5$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
   \item \[
     B_k = \sqrt{1+ \ell n\sigma_1^2 + mn\sigma_2^2}.
   \]
@@ -186,7 +186,7 @@ H_h=
 {\small
 \begin{tabular}{@{}l@{}}
 \texttt{python3 para\_alg\_impl.py --n 256 --q 13313 --l 3 --m 2}\\
-\texttt{--sigma 0.7071067811865476 --alpha-h 128}
+\texttt{--sigma-1 0.7071067811865476 --sigma-2 0.7071067811865476 --alpha-h 128}
 \end{tabular}
 }
 

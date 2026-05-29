@@ -74,6 +74,7 @@ th.sel { background: #dde; }
   <button id="select-all-visible">select all page</button>
   <button id="select-none">deselect all</button>
   <button id="copy-selected">copy selected JSON</button>
+  <button id="delete-selected">delete selected</button>
   <span id="copy-status"></span>
 </div>
 
@@ -104,7 +105,7 @@ th.sel { background: #dde; }
   <thead>
     <tr>
       <th class="group"></th>
-      <th class="group" colspan="7">inputs</th>
+      <th class="group" colspan="8">inputs</th>
       <th class="group sep-l col-derived" colspan="9" id="derived-group">derived</th>
       <th class="group sep-l" colspan="6">outputs</th>
       <th class="group sep-l">meta</th>
@@ -116,7 +117,8 @@ th.sel { background: #dde; }
       <th data-sort="q">q</th>
       <th data-sort="ell">ell</th>
       <th data-sort="m">m</th>
-      <th data-sort="sigma">sigma</th>
+      <th data-sort="sigma_1">sigma_1</th>
+      <th data-sort="sigma_2">sigma_2</th>
       <th data-sort="alpha_h">alpha_h</th>
       <th data-sort="bk" class="sep-l col-derived">bk</th>
       <th data-sort="alpha_1" class="col-derived">alpha_1</th>
@@ -142,6 +144,7 @@ th.sel { background: #dde; }
 
 <script>
 const dataUrl = "param_all.data.json";
+const deleteApiUrl = "";
 let records = [];
 const selected = new Set();
 let sortKey = null, sortAsc = true;
@@ -165,11 +168,11 @@ function isSecurityThresholdTag(t) {
   return /^(lwe|sis_uf|sis_suf)>\d+$/.test(t);
 }
 
-// Sort tags so target_security=* comes first, then rough, then sigma>=1, then lwe>*, sis_uf>*, sis_suf>*
+// Sort tags so target_security=* comes first, then rough, then min(sigma_1,sigma_2)>=1, then lwe>*, sis_uf>*, sis_suf>*
 function tagSortKey(t) {
   if (t.startsWith('target_security=')) return [0, parseInt(t.split('=')[1], 10)];
   if (t === 'rough') return [1, 0];
-  if (t === 'sigma>=1') return [2, 1];
+  if (t === 'min(sigma_1,sigma_2)>=1') return [2, 1];
   if (isSecurityThresholdTag(t)) {
     const order = { 'lwe': 3, 'sis_uf': 4, 'sis_suf': 5 };
     const [prefix, thr] = t.split('>');
@@ -345,6 +348,51 @@ async function copySelected() {
 
 document.getElementById('copy-selected').addEventListener('click', copySelected);
 
+function recordKeyForApi(record) {
+  const i = record.inputs || {};
+  const sigma1 = i.sigma_1 ?? i.sigma;
+  const sigma2 = i.sigma_2 ?? i.sigma;
+  return [i.n, i.q, i.ell, i.m, sigma1, sigma2, i.alpha_h];
+}
+
+async function deleteSelected() {
+  const status = document.getElementById('copy-status');
+  if (!deleteApiUrl) {
+    status.textContent = 'delete is unavailable for this report';
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 2000);
+    return;
+  }
+  if (selected.size === 0) {
+    status.textContent = 'nothing selected';
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 1500);
+    return;
+  }
+
+  const keys = [...selected].sort((a, b) => a - b).map(i => recordKeyForApi(records[i]));
+  if (!window.confirm(`Delete ${keys.length} selected record(s)?`)) return;
+
+  try {
+    const response = await fetch(deleteApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    status.textContent = `deleted ${result.removed} record(s), reloading...`;
+    selected.clear();
+    setTimeout(() => { window.location.reload(); }, 250);
+  } catch (err) {
+    status.textContent = `delete failed: ${err}`;
+    status.style.color = '#b00';
+    setTimeout(() => { status.textContent = ''; status.style.color = '#060'; }, 2500);
+  }
+}
+
+document.getElementById('delete-selected').addEventListener('click', deleteSelected);
+
 function updateTagVisibility() {
   const checkedTargets = [...document.querySelectorAll('#tag-filter input[data-tag^="target_security="]:checked')]
     .map(i => parseInt(i.dataset.tag.split('=')[1], 10));
@@ -385,7 +433,11 @@ function fmtNum(x, digits = 1) {
 }
 
 function getField(r, k) {
-  if (r.inputs && k in r.inputs) return r.inputs[k];
+  if (r.inputs) {
+    if (k === 'sigma_1') return r.inputs.sigma_1 ?? r.inputs.sigma ?? null;
+    if (k === 'sigma_2') return r.inputs.sigma_2 ?? r.inputs.sigma ?? null;
+    if (k in r.inputs) return r.inputs[k];
+  }
   if (r.outputs && k in r.outputs) return r.outputs[k];
   return null;
 }
@@ -425,6 +477,8 @@ function render() {
   const html = rows.map(r => {
     const i = r.inputs || {}, o = r.outputs || {};
     const failed = !r.outputs;
+    const sigma1 = i.sigma_1 ?? i.sigma ?? '';
+    const sigma2 = i.sigma_2 ?? i.sigma ?? '';
     const tail = failed
       ? `<td class="reason sep-l">${(r.reason || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`
       : `<td class="tags sep-l">${(r.tags || []).join(', ')}</td>`;
@@ -438,7 +492,8 @@ function render() {
       <td>${i.q ?? ''}</td>
       <td>${i.ell ?? ''}</td>
       <td>${i.m ?? ''}</td>
-      <td>${i.sigma ?? ''}</td>
+      <td>${fmtNum(sigma1, 3)}</td>
+      <td>${fmtNum(sigma2, 3)}</td>
       <td>${i.alpha_h ?? ''}</td>
       <td class="sep-l col-derived">${fmtNum(i.bk, 2)}</td>
       <td class="col-derived">${fmtNum(i.alpha_1, 0)}</td>
@@ -498,6 +553,9 @@ document.addEventListener('change', e => {
 async function init() {
   loadStatus.textContent = 'Loading data...';
   loadStatus.classList.remove('error');
+  if (!deleteApiUrl) {
+    document.getElementById('delete-selected').style.display = 'none';
+  }
   try {
     const response = await fetch(freshDataUrl(), { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

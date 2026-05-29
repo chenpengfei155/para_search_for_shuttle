@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Scan all results/*.jsonl, keep records matching Goal A (LWE & SIS_UF in band)
-or Goal B (LWE & SIS_sUF in band), collapse repeated sigma plateaus, and write
+or Goal B (LWE & SIS_sUF in band), collapse repeated sigma-pair plateaus, and write
 to results/param_ideal.jsonl. Adds a `goal` tag to each record."""
 from __future__ import annotations
 

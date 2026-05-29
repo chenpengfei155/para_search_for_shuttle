@@ -3,8 +3,8 @@
 
 User's current goal: band = [target+5, target+30]  (was +12 in extract_ideal).
 Two tracks reported per (target, goal):
-  - general: sigma on 0.05 grid, sigma >= 0.5 (code minimum)
-  - sigma>=1: sigma on 0.05 grid, sigma >= 1.0  (new hard constraint)
+    - general: sigma_1 and sigma_2 on the 0.05 grid, min(sigma_1, sigma_2) >= 0.5
+    - hard: sigma_1 and sigma_2 on the 0.05 grid, min(sigma_1, sigma_2) >= 1.0
 
 Pure analysis of existing computed records; no estimator calls.
 """
@@ -120,7 +120,7 @@ def main():
 
     for hi_off in (12, 30):
         print(f"================ BAND [+5, +{hi_off}] ================")
-        for sigma_min, label in ((0.5, "sigma>=0.5 (general)"), (1.0, "sigma>=1.0 (hard)")):
+        for sigma_min, label in ((0.5, "min(sigma_1,sigma_2)>=0.5 (general)"), (1.0, "min(sigma_1,sigma_2)>=1.0 (hard)")):
             print(f"  --- {label} ---")
             best = best_under(recs, hi_off, sigma_min)
             for t in (128, 256, 512):

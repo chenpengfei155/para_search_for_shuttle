@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Query existing results for a given (target, ell, m) and optional q set / sigma set.
+"""Query existing results for a given (target, ell, m) and optional q / sigma filters.
 Prints every matching computed record sorted by CombinedBytes, flagging band membership
-under [target+5, target+30]. Pure analysis, no estimator."""
+under [target+5, target+30]. Use --sigma as symmetric shorthand for sigma_1=sigma_2.
+Pure analysis, no estimator."""
 from __future__ import annotations
 
 import argparse

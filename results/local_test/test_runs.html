@@ -168,11 +168,11 @@ function isSecurityThresholdTag(t) {
   return /^(lwe|sis_uf|sis_suf)>\d+$/.test(t);
 }
 
-// Sort tags so target_security=* comes first, then rough, then sigma>=1, then lwe>*, sis_uf>*, sis_suf>*
+// Sort tags so target_security=* comes first, then rough, then min(sigma_1,sigma_2)>=1, then lwe>*, sis_uf>*, sis_suf>*
 function tagSortKey(t) {
   if (t.startsWith('target_security=')) return [0, parseInt(t.split('=')[1], 10)];
   if (t === 'rough') return [1, 0];
-  if (t === 'sigma>=1') return [2, 1];
+  if (t === 'min(sigma_1,sigma_2)>=1') return [2, 1];
   if (isSecurityThresholdTag(t)) {
     const order = { 'lwe': 3, 'sis_uf': 4, 'sis_suf': 5 };
     const [prefix, thr] = t.split('>');
