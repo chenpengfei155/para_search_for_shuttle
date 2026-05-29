@@ -185,14 +185,10 @@ def is_power_of_two(value: int) -> bool:
     return value > 0 and (value & (value - 1)) == 0
 
 
-def ceil_power_of_two(value: float) -> int:
+def floor_power_of_two(value: float) -> int:
     if value <= 1:
         return 1
-    rounded_exponent = round(math.log2(value))
-    rounded_power = 2**rounded_exponent
-    if math.isclose(value, rounded_power, rel_tol=1e-12, abs_tol=1e-12):
-        return int(rounded_power)
-    return 1 << math.ceil(math.log2(value))
+    return 1 << math.floor(math.log2(value))
 
 
 def hint_entropy(r: int, alpha_h: int) -> tuple[float, str, float, float]:
@@ -281,11 +277,11 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma: float, alpha_h: 
     if (q - 1) % lambda_bits != 0:
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
-    bk = math.sqrt(ell * n * sigma**2 + m * n * sigma**2)
-    alpha_1 = ceil_power_of_two(math.sqrt(n) * sigma)
+    bk = math.sqrt(1 + ell * n * sigma**2 + m * n * sigma**2)
+    alpha_1 = floor_power_of_two(math.sqrt(n) * sigma)
 
     scale = R_SCALING[lambda_bits]
-    r = math.ceil(scale * math.sqrt(alpha_1**2 / ell + bk**2))
+    r = math.ceil(scale * math.sqrt(alpha_1**2 - 1 + bk**2))
 
     mu_s = n * (r / alpha_1) ** 2 + ell * n * r**2 + m * n * r**2
     v_s = 2 * n * (r / alpha_1) ** 4 + 2 * ell * n * r**4 + 2 * m * n * r**4
