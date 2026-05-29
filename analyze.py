@@ -8,6 +8,17 @@ from collections import defaultdict
 from pathlib import Path
 
 
+def sigma_pair(inputs):
+    sigma_1 = inputs.get("sigma_1")
+    sigma_2 = inputs.get("sigma_2")
+    legacy_sigma = inputs.get("sigma")
+    if sigma_1 is None:
+        sigma_1 = legacy_sigma
+    if sigma_2 is None:
+        sigma_2 = legacy_sigma
+    return sigma_1, sigma_2
+
+
 def load(path):
     recs = []
     with open(path) as f:
@@ -68,8 +79,9 @@ def main():
                 pass
             for r in items[: args.show]:
                 i, o = r["inputs"], r["outputs"]
+                sigma_1, sigma_2 = sigma_pair(i)
                 print(
-                    f"    n={i['n']:>4} q={i['q']:>7} ell={i['ell']} m={i['m']} sigma={i['sigma']:.2f} alpha_h={i['alpha_h']:>4}  "
+                    f"    n={i['n']:>4} q={i['q']:>7} ell={i['ell']} m={i['m']} sigma_1={sigma_1:.2f} sigma_2={sigma_2:.2f} alpha_h={i['alpha_h']:>4}  "
                     f"| LWE={o['LWE_security_bit']:6.2f} UF={o['SIS_UF_security_bit']:6.2f} sUF={o['SIS_sUF_security_bit']:6.2f}  "
                     f"| Pk={o.get('PkBytes',0)} Sign={o.get('SignBytes',0)}"
                 )
@@ -98,15 +110,17 @@ def main():
             print("    closest to UF goal:")
             for r in sorted(rs, key=dist_uf)[:5]:
                 i, o = r["inputs"], r["outputs"]
+                sigma_1, sigma_2 = sigma_pair(i)
                 print(
-                    f"      q={i['q']:>7} ell={i['ell']} m={i['m']} sigma={i['sigma']:.2f} alpha_h={i['alpha_h']:>4}"
+                    f"      q={i['q']:>7} ell={i['ell']} m={i['m']} sigma_1={sigma_1:.2f} sigma_2={sigma_2:.2f} alpha_h={i['alpha_h']:>4}"
                     f" | LWE={o['LWE_security_bit']:6.2f} UF={o['SIS_UF_security_bit']:6.2f} sUF={o['SIS_sUF_security_bit']:6.2f}"
                 )
             print("    closest to sUF goal:")
             for r in sorted(rs, key=dist_suf)[:5]:
                 i, o = r["inputs"], r["outputs"]
+                sigma_1, sigma_2 = sigma_pair(i)
                 print(
-                    f"      q={i['q']:>7} ell={i['ell']} m={i['m']} sigma={i['sigma']:.2f} alpha_h={i['alpha_h']:>4}"
+                    f"      q={i['q']:>7} ell={i['ell']} m={i['m']} sigma_1={sigma_1:.2f} sigma_2={sigma_2:.2f} alpha_h={i['alpha_h']:>4}"
                     f" | LWE={o['LWE_security_bit']:6.2f} UF={o['SIS_UF_security_bit']:6.2f} sUF={o['SIS_sUF_security_bit']:6.2f}"
                 )
 

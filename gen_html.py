@@ -11,7 +11,7 @@ from result_dedup import pick_plateau_representatives, record_key
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma", "alpha_h")
+PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma_1", "sigma_2", "alpha_h")
 GOAL_LO_OFFSET = 5
 GOAL_HI_OFFSET = 30
 SIGMA_AT_LEAST_ONE_TAG = "sigma>=1"
@@ -123,7 +123,7 @@ th.sel { background: #dde; }
   <thead>
     <tr>
       <th class="group"></th>
-      <th class="group" colspan="7">inputs</th>
+      <th class="group" colspan="8">inputs</th>
       <th class="group sep-l col-derived" colspan="9" id="derived-group">derived</th>
       <th class="group sep-l" colspan="6">outputs</th>
       <th class="group sep-l">meta</th>
@@ -135,7 +135,8 @@ th.sel { background: #dde; }
       <th data-sort="q">q</th>
       <th data-sort="ell">ell</th>
       <th data-sort="m">m</th>
-      <th data-sort="sigma">sigma</th>
+      <th data-sort="sigma_1">sigma_1</th>
+      <th data-sort="sigma_2">sigma_2</th>
       <th data-sort="alpha_h">alpha_h</th>
       <th data-sort="bk" class="sep-l col-derived">bk</th>
       <th data-sort="alpha_1" class="col-derived">alpha_1</th>
@@ -367,7 +368,9 @@ document.getElementById('copy-selected').addEventListener('click', copySelected)
 
 function recordKeyForApi(record) {
   const i = record.inputs || {};
-  return [i.n, i.q, i.ell, i.m, i.sigma, i.alpha_h];
+  const sigma1 = i.sigma_1 ?? i.sigma;
+  const sigma2 = i.sigma_2 ?? i.sigma;
+  return [i.n, i.q, i.ell, i.m, sigma1, sigma2, i.alpha_h];
 }
 
 async function deleteSelected() {
@@ -448,7 +451,11 @@ function fmtNum(x, digits = 1) {
 }
 
 function getField(r, k) {
-  if (r.inputs && k in r.inputs) return r.inputs[k];
+  if (r.inputs) {
+    if (k === 'sigma_1') return r.inputs.sigma_1 ?? r.inputs.sigma ?? null;
+    if (k === 'sigma_2') return r.inputs.sigma_2 ?? r.inputs.sigma ?? null;
+    if (k in r.inputs) return r.inputs[k];
+  }
   if (r.outputs && k in r.outputs) return r.outputs[k];
   return null;
 }
@@ -488,6 +495,8 @@ function render() {
   const html = rows.map(r => {
     const i = r.inputs || {}, o = r.outputs || {};
     const failed = !r.outputs;
+    const sigma1 = i.sigma_1 ?? i.sigma ?? '';
+    const sigma2 = i.sigma_2 ?? i.sigma ?? '';
     const tail = failed
       ? `<td class="reason sep-l">${(r.reason || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`
       : `<td class="tags sep-l">${(r.tags || []).join(', ')}</td>`;
@@ -501,7 +510,8 @@ function render() {
       <td>${i.q ?? ''}</td>
       <td>${i.ell ?? ''}</td>
       <td>${i.m ?? ''}</td>
-      <td>${i.sigma ?? ''}</td>
+      <td>${fmtNum(sigma1, 3)}</td>
+      <td>${fmtNum(sigma2, 3)}</td>
       <td>${i.alpha_h ?? ''}</td>
       <td class="sep-l col-derived">${fmtNum(i.bk, 2)}</td>
       <td class="col-derived">${fmtNum(i.alpha_1, 0)}</td>
@@ -659,6 +669,17 @@ def dedupe_exact_records(rows: list[dict]) -> list[dict]:
   return unique_rows
 
 
+def sigma_pair(inputs: dict) -> tuple[float | None, float | None]:
+  sigma_1 = inputs.get("sigma_1")
+  sigma_2 = inputs.get("sigma_2")
+  legacy_sigma = inputs.get("sigma")
+  if sigma_1 is None:
+    sigma_1 = legacy_sigma
+  if sigma_2 is None:
+    sigma_2 = legacy_sigma
+  return sigma_1, sigma_2
+
+
 def sort_records(rows: list[dict]) -> list[dict]:
   return sorted(
     rows,
@@ -668,7 +689,8 @@ def sort_records(rows: list[dict]) -> list[dict]:
       (record.get("inputs") or {}).get("ell", math.inf),
       (record.get("inputs") or {}).get("m", math.inf),
       (record.get("inputs") or {}).get("q", math.inf),
-      (record.get("inputs") or {}).get("sigma", math.inf),
+      sigma_pair(record.get("inputs") or {})[0] if sigma_pair(record.get("inputs") or {})[0] is not None else math.inf,
+      sigma_pair(record.get("inputs") or {})[1] if sigma_pair(record.get("inputs") or {})[1] is not None else math.inf,
       (record.get("inputs") or {}).get("alpha_h", math.inf),
     ),
   )
@@ -720,9 +742,14 @@ def enrich_html_tags(record: dict) -> dict:
   enriched_record = dict(record)
   tags = list(enriched_record.get("tags") or [])
   inputs = enriched_record.get("inputs")
-  sigma = inputs.get("sigma") if isinstance(inputs, dict) else None
+  sigma_1, sigma_2 = sigma_pair(inputs) if isinstance(inputs, dict) else (None, None)
 
-  if isinstance(sigma, (int, float)) and sigma >= 1 and SIGMA_AT_LEAST_ONE_TAG not in tags:
+  if (
+    isinstance(sigma_1, (int, float))
+    and isinstance(sigma_2, (int, float))
+    and min(sigma_1, sigma_2) >= 1
+    and SIGMA_AT_LEAST_ONE_TAG not in tags
+  ):
     tags.append(SIGMA_AT_LEAST_ONE_TAG)
 
   if tags:
@@ -731,10 +758,11 @@ def enrich_html_tags(record: dict) -> dict:
   return enriched_record
 
 
-def render_html_rows(rows: list[dict], out_path: Path) -> None:
+def render_html_rows(rows: list[dict], out_path: Path, delete_api_url: str = "", collapse_plateaus: bool = True) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     data_path = out_path.with_suffix(".data.json")
-    html_rows = [enrich_html_tags(record) for record in pick_plateau_representatives(rows)]
+    source_rows = pick_plateau_representatives(rows) if collapse_plateaus else rows
+    html_rows = [enrich_html_tags(record) for record in source_rows]
     sanitized_rows = normalize_json_value(html_rows)
     data_path.write_text(json.dumps(sanitized_rows, ensure_ascii=False), encoding="utf-8")
 

@@ -21,6 +21,17 @@ HTML_PATH = REPORT_DIR / "test_runs.html"
 DELETE_API_PATH = "/api/local-test/delete"
 
 
+def normalize_delete_key(item: list) -> tuple | None:
+    if not isinstance(item, list):
+        return None
+    if len(item) == 6:
+        n, q, ell, m, sigma, alpha_h = item
+        return (n, q, ell, m, sigma, sigma, alpha_h)
+    if len(item) == 7:
+        return tuple(item)
+    return None
+
+
 def load_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -48,7 +59,7 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 def rebuild_report(rows: list[dict]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     write_jsonl(JSONL_PATH, rows)
-    render_html_rows(rows, HTML_PATH, delete_api_url=DELETE_API_PATH)
+    render_html_rows(rows, HTML_PATH, delete_api_url=DELETE_API_PATH, collapse_plateaus=False)
 
 
 class LocalReportHandler(SimpleHTTPRequestHandler):
@@ -77,9 +88,9 @@ class LocalReportHandler(SimpleHTTPRequestHandler):
             return
 
         delete_keys = {
-            tuple(item)
+            normalized
             for item in keys
-            if isinstance(item, list) and len(item) == 6
+            if (normalized := normalize_delete_key(item)) is not None
         }
 
         rows = load_jsonl(JSONL_PATH)

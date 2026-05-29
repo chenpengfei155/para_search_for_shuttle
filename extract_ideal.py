@@ -20,6 +20,17 @@ GOAL_HI_OFFSET = 30  # acceptance band upper edge (user goal: lambda+5 <= sec <=
 SIGMA_MIN_STEP = 0.05
 
 
+def sigma_pair(inputs: dict) -> tuple[float | None, float | None]:
+    sigma_1 = inputs.get("sigma_1")
+    sigma_2 = inputs.get("sigma_2")
+    legacy_sigma = inputs.get("sigma")
+    if sigma_1 is None:
+        sigma_1 = legacy_sigma
+    if sigma_2 is None:
+        sigma_2 = legacy_sigma
+    return sigma_1, sigma_2
+
+
 def in_band(value, lo, hi):
     return value is not None and lo <= value <= hi
 
@@ -53,7 +64,8 @@ def main():
                     continue
                 i = rec.get("inputs") or {}
                 o = rec["outputs"]
-                if not sigma_on_grid(i.get("sigma")):
+                sigma_1, sigma_2 = sigma_pair(i)
+                if not sigma_on_grid(sigma_1) or not sigma_on_grid(sigma_2):
                     continue
                 t = i.get("target_security")
                 if t is None:
@@ -89,7 +101,7 @@ def main():
         collapsed_records,
         key=lambda r: (r["inputs"]["target_security"], r["inputs"]["n"],
                        r["inputs"]["ell"], r["inputs"]["m"],
-                       r["inputs"]["q"], r["inputs"]["sigma"],
+                       sigma_pair(r["inputs"])[0], sigma_pair(r["inputs"])[1], r["inputs"]["q"],
                        r["inputs"]["alpha_h"]),
     )
 

@@ -37,3 +37,5 @@ env/
 results/iter*.jsonl
 results/iter*.html
 results/iter*.data.json
+test.py
+run_test.sh

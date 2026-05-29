@@ -29,9 +29,9 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 # ====================================================================
 # FINAL MIN-Combined per (target, goal) — synced with memory.md §2 & param_ideal.jsonl
 # Band = [target+5, target+30] (GOAL_HI_OFFSET=30, user 2026-05-29).
-# Sigma-grid rule: sigma must be a multiple of 0.05; no sub-0.05 micro-tuning.
+# Sigma-grid rule: sigma_1 and sigma_2 must be multiples of 0.05; no sub-0.05 micro-tuning.
 #
-# --- 2.1 GENERAL (sigma>=0.5, on-grid) ---
+# --- 2.1 GENERAL (sigma_1,sigma_2>=0.5, on-grid) ---
 # t=128 A Comb=1866  q=4993  ell=3 m=2 s=0.50 a_h=128  L=144.83 UF=134.32 (Pk=848  Sn=1018)
 # t=128 B Comb=2090  q=3329  ell=3 m=3 s=0.55 a_h=512  L=144.81 sUF=135.20 (Pk=1168 Sn=922)
 # t=256 A Comb=3847  q=30977 ell=3 m=2 s=0.50 a_h=1024 L=266.01 UF=282.07 (Pk=1952 Sn=1895)
@@ -59,12 +59,13 @@ PARAM_GROUPS: list[dict] = [
         "target_security": 512, "n": [1024],
         "q":       [32257, 65537, 133121, 326657, 658433],
         "ell":     [2], "m": [2],
-        "sigma":   [0.70, 1.00],
+        "sigma_1": [0.70, 1.00],
+        "sigma_2": [0.70, 1.00],
         "alpha_h": [1024, 4096],
     },
 ]
 
-PARAM_KEYS = ("n", "q", "ell", "m", "sigma", "alpha_h")
+PARAM_KEYS = ("n", "q", "ell", "m", "sigma_1", "sigma_2", "alpha_h")
 
 TAG_SOURCES = [
     ("lwe",     "LWE_security_bit"),
@@ -98,13 +99,14 @@ def thresholds_for(target_security: int) -> list[int]:
 
 def validate_sigma_groups() -> None:
     for group in PARAM_GROUPS:
-        sigma_values = sorted({float(value) for value in group["sigma"]})
-        for left, right in zip(sigma_values, sigma_values[1:]):
-            if right - left < SIGMA_MIN_STEP - 1e-12:
-                raise ValueError(
-                    f"sigma grid too fine for target={group['target_security']}: "
-                    f"{left} -> {right} violates min step {SIGMA_MIN_STEP}"
-                )
+        for sigma_key in ("sigma_1", "sigma_2"):
+            sigma_values = sorted({float(value) for value in group[sigma_key]})
+            for left, right in zip(sigma_values, sigma_values[1:]):
+                if right - left < SIGMA_MIN_STEP - 1e-12:
+                    raise ValueError(
+                        f"{sigma_key} grid too fine for target={group['target_security']}: "
+                        f"{left} -> {right} violates min step {SIGMA_MIN_STEP}"
+                    )
 
 
 def is_prime(value: int) -> bool:
@@ -144,7 +146,7 @@ def sub_group_key(params: dict) -> tuple:
 
 def iter_param_combinations() -> list[dict]:
     """Build tasks list. Within each (target, ell, m, n) sub-group the order is
-    shuffled with a fixed seed so the first few completions span q/sigma/alpha_h
+    shuffled with a fixed seed so the first few completions span q/sigma_1/sigma_2/alpha_h
     diversely (drives sub-group pruning to fire early)."""
     rng = random.Random(SUB_PROBE_SEED)
     sub_buckets: dict[tuple, list[dict]] = {}
@@ -170,7 +172,8 @@ def params_key(params: dict) -> tuple:
         params["q"],
         params["ell"],
         params["m"],
-        float(params["sigma"]),
+        float(params["sigma_1"]),
+        float(params["sigma_2"]),
         params["alpha_h"],
     )
 

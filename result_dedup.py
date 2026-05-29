@@ -3,18 +3,43 @@ from __future__ import annotations
 from typing import Any
 
 
-PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma", "alpha_h")
+PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma_1", "sigma_2", "alpha_h")
 PLATEAU_INPUT_FIELDS = ("target_security", "n", "q", "ell", "m", "alpha_h")
 PLATEAU_OUTPUT_FIELDS = ("PkBytes", "SignBytes", "CombinedBytes")
+
+
+def sigma_pair(inputs: dict) -> tuple[float, float] | None:
+    sigma_1 = inputs.get("sigma_1")
+    sigma_2 = inputs.get("sigma_2")
+    legacy_sigma = inputs.get("sigma")
+
+    if sigma_1 is None:
+        sigma_1 = legacy_sigma
+    if sigma_2 is None:
+        sigma_2 = legacy_sigma
+    if sigma_1 is None or sigma_2 is None:
+        return None
+    return sigma_1, sigma_2
 
 
 def record_key(record: dict) -> tuple | None:
     inputs = record.get("inputs")
     if not isinstance(inputs, dict):
         return None
-    if not all(field in inputs for field in PARAM_KEY_FIELDS):
+    if not all(field in inputs for field in ("n", "q", "ell", "m", "alpha_h")):
         return None
-    return tuple(inputs[field] for field in PARAM_KEY_FIELDS)
+    sigmas = sigma_pair(inputs)
+    if sigmas is None:
+        return None
+    return (
+        inputs["n"],
+        inputs["q"],
+        inputs["ell"],
+        inputs["m"],
+        sigmas[0],
+        sigmas[1],
+        inputs["alpha_h"],
+    )
 
 
 def plateau_key(record: dict) -> tuple | None:
@@ -37,8 +62,10 @@ def plateau_key(record: dict) -> tuple | None:
 def plateau_preference_key(record: dict) -> tuple[Any, ...]:
     inputs = record.get("inputs") or {}
     outputs = record.get("outputs") or {}
+    sigmas = sigma_pair(inputs) or (float("-inf"), float("-inf"))
     return (
-        float(inputs.get("sigma", float("-inf"))),
+        float(sigmas[0]),
+        float(sigmas[1]),
         float(outputs.get("LWE_security_bit", float("-inf"))),
         float(outputs.get("SIS_UF_security_bit", float("-inf"))),
         float(outputs.get("SIS_sUF_security_bit", float("-inf"))),

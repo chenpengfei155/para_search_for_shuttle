@@ -21,6 +21,17 @@ LO = 5
 SIGMA_STEP = 0.05
 
 
+def sigma_pair(inputs: dict) -> tuple[float | None, float | None]:
+    sigma_1 = inputs.get("sigma_1")
+    sigma_2 = inputs.get("sigma_2")
+    legacy_sigma = inputs.get("sigma")
+    if sigma_1 is None:
+        sigma_1 = legacy_sigma
+    if sigma_2 is None:
+        sigma_2 = legacy_sigma
+    return sigma_1, sigma_2
+
+
 def sigma_on_grid(v) -> bool:
     if not isinstance(v, (int, float)):
         return False
@@ -47,8 +58,9 @@ def load_all() -> dict[tuple, dict]:
                 o = rec.get("outputs")
                 if o is None:
                     continue
+                sigma_1, sigma_2 = sigma_pair(i)
                 key = (i.get("n"), i.get("q"), i.get("ell"), i.get("m"),
-                       i.get("sigma"), i.get("alpha_h"))
+                       sigma_1, sigma_2, i.get("alpha_h"))
                 if None in key:
                     continue
                 seen[key] = rec
@@ -62,8 +74,13 @@ def best_under(records, hi_off: int, sigma_min: float):
         i = rec["inputs"]
         o = rec["outputs"]
         t = i.get("target_security")
-        sigma = i.get("sigma")
-        if t is None or not sigma_on_grid(sigma) or sigma < sigma_min - 1e-9:
+        sigma_1, sigma_2 = sigma_pair(i)
+        if (
+            t is None
+            or not sigma_on_grid(sigma_1)
+            or not sigma_on_grid(sigma_2)
+            or min(sigma_1, sigma_2) < sigma_min - 1e-9
+        ):
             continue
         lo, hi = t + LO, t + hi_off
         l = o.get("LWE_security_bit")
@@ -90,8 +107,9 @@ def best_under(records, hi_off: int, sigma_min: float):
 def fmt(rec):
     i = rec["inputs"]
     o = rec["outputs"]
+    sigma_1, sigma_2 = sigma_pair(i)
     return (f"Comb={o['CombinedBytes']:<6} q={i['q']:<10} ell={i['ell']} m={i['m']} "
-            f"sigma={i['sigma']:<6} a_h={i['alpha_h']:<5} "
+            f"sigma_1={sigma_1:<6} sigma_2={sigma_2:<6} a_h={i['alpha_h']:<5} "
             f"L={o['LWE_security_bit']:.2f} UF={o['SIS_UF_security_bit']:.2f} "
             f"sUF={o['SIS_sUF_security_bit']:.2f} Pk={o['PkBytes']} Sign={o['SignBytes']}")
 
