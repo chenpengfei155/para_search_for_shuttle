@@ -282,7 +282,7 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
     bk = math.sqrt(1 + ell * n * sigma_1**2 + m * n * sigma_2**2)
-    alpha_1 = floor_power_of_two(math.sqrt(n) * sigma_1)
+    alpha_1 = floor_power_of_two(math.sqrt((ell * n * sigma_1**2 + m * n * sigma_2**2) / (ell + n)))
 
     scale = R_SCALING[lambda_bits]
     r = math.ceil(scale * math.sqrt(alpha_1**2 - 1 + bk**2))
