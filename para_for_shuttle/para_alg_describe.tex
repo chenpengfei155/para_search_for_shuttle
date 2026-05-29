@@ -1,3 +1,4 @@
+% !TeX program = lualatex
 \documentclass[11pt]{article}
 
 \usepackage[a4paper,margin=1in]{geometry}
@@ -54,18 +55,18 @@
   \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
   \item {\zhfont 若 $\sigma<0.5$，则返回：$\sigma$ 不合法，离散高斯中分布标准差太小。}
   \item \[
-    B_k = \sqrt{\ell n\sigma^2 + mn\sigma^2}.
+    B_k = \sqrt{1+ \ell n\sigma^2 + mn\sigma^2}.
   \]
   \item \[
-    \alpha_1 = 2^{\left\lceil \log_2(\sqrt{n}\,\sigma)\right\rceil}.
+    \alpha_1 = 2^{\lfloor \log_2(\sqrt{n}\,\sigma)\rfloor}.
   \]
   \item {\zhfont 根据 $\lambda$ 取不同常数，计算}
   \[
     r=
     \begin{cases}
-      \left\lceil 2.75\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=128,\\[0.5em]
-      \left\lceil 2.78\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=256,\\[0.5em]
-      \left\lceil 2.81\sqrt{\alpha_1^2/\ell + B_k^2}\right\rceil, & \lambda=512.
+      \left\lceil 2.75\sqrt{\alpha_1^2- 1 + B_k^2}\right\rceil, & \lambda=128,\\[0.5em]
+      \left\lceil 2.78\sqrt{\alpha_1^2 -1+ B_k^2}\right\rceil, & \lambda=256,\\[0.5em]
+      \left\lceil 2.81\sqrt{\alpha_1^2 -1+ B_k^2}\right\rceil, & \lambda=512.
     \end{cases}
   \]
   \item \[
