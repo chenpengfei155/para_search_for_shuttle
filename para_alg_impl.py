@@ -65,7 +65,8 @@ class LWEParameterSpec:
     n: int
     q: int
     m: int
-    sigma: float
+    sigma_1: float
+    sigma_2: float
     tag: str | None = None
 
 
@@ -85,7 +86,8 @@ class AlgorithmResult:
     q: int
     ell: int
     m: int
-    sigma: float
+    sigma_1: float
+    sigma_2: float
     alpha_h: int
     lambda_bits: int
     bk: float
@@ -216,8 +218,8 @@ def build_estimator_objects(
     lwe_param = LWEParameters(
         n=lwe_spec.n,
         q=lwe_spec.q,
-        Xs=ND.DiscreteGaussian(lwe_spec.sigma),
-        Xe=ND.DiscreteGaussian(lwe_spec.sigma),
+        Xs=ND.DiscreteGaussian(lwe_spec.sigma_1),
+        Xe=ND.DiscreteGaussian(lwe_spec.sigma_2),
         m=lwe_spec.m,
         tag=lwe_spec.tag,
     )
@@ -261,7 +263,7 @@ def estimate_sis_security_bits(sis_param: Any | None) -> float | None:
     return extract_rop_bits(result.get("lattice", {}).get("rop"))
 
 
-def compute_parameters(n: int, q: int, ell: int, m: int, sigma: float, alpha_h: int) -> AlgorithmArtifacts:
+def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2: float, alpha_h: int) -> AlgorithmArtifacts:
     if n not in ALLOWED_N:
         raise ParameterValidationError("n不合法")
     if q <= 1:
@@ -270,15 +272,17 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma: float, alpha_h: 
         raise ParameterValidationError("l和m必须为正整数")
     if alpha_h <= 0:
         raise ParameterValidationError("alpha_h必须为正整数")
-    if sigma < 0.5:
-        raise ParameterValidationError("sigma不合法，离散高斯中分布标准差太小")
+    if sigma_1 < 0.5:
+        raise ParameterValidationError("sigma_1不合法，离散高斯中分布标准差太小")
+    if sigma_2 < 0.5:
+        raise ParameterValidationError("sigma_2不合法，离散高斯中分布标准差太小")
 
     lambda_bits = n // 2
     if (q - 1) % lambda_bits != 0:
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
-    bk = math.sqrt(1 + ell * n * sigma**2 + m * n * sigma**2)
-    alpha_1 = floor_power_of_two(math.sqrt(n) * sigma)
+    bk = math.sqrt(1 + ell * n * sigma_1**2 + m * n * sigma_2**2)
+    alpha_1 = floor_power_of_two(math.sqrt(n) * sigma_1)
 
     scale = R_SCALING[lambda_bits]
     r = math.ceil(scale * math.sqrt(alpha_1**2 - 1 + bk**2))
@@ -300,7 +304,8 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma: float, alpha_h: 
         n=ell * n,
         q=q,
         m=m * n,
-        sigma=sigma,
+        sigma_1=sigma_1,
+        sigma_2=sigma_2,
         tag=None,
     )
     sis_uf_spec = SISParameterSpec(
@@ -342,7 +347,8 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma: float, alpha_h: 
         q=q,
         ell=ell,
         m=m,
-        sigma=sigma,
+        sigma_1=sigma_1,
+        sigma_2=sigma_2,
         alpha_h=alpha_h,
         lambda_bits=lambda_bits,
         bk=bk,
@@ -380,7 +386,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--q", type=int, required=True)
     parser.add_argument("--l", type=int, required=True, dest="ell")
     parser.add_argument("--m", type=int, required=True)
-    parser.add_argument("--sigma", type=float, required=True)
+    parser.add_argument("--sigma-1", type=float, required=True, dest="sigma_1")
+    parser.add_argument("--sigma-2", type=float, required=True, dest="sigma_2")
     parser.add_argument("--alpha-h", type=int, required=True, dest="alpha_h")
     parser.add_argument("--indent", type=int, default=2)
     return parser
@@ -395,7 +402,8 @@ def main() -> int:
             q=args.q,
             ell=args.ell,
             m=args.m,
-            sigma=args.sigma,
+            sigma_1=args.sigma_1,
+            sigma_2=args.sigma_2,
             alpha_h=args.alpha_h,
         )
     except ParameterValidationError as exc:
