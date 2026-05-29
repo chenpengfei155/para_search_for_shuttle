@@ -16,7 +16,7 @@ SOURCE_GLOB = "*.jsonl"
 EXCLUDE_NAMES = {"param_all.jsonl", "param_ideal.jsonl"}
 
 GOAL_LO_OFFSET = 5
-GOAL_HI_OFFSET = 12
+GOAL_HI_OFFSET = 30  # acceptance band upper edge (user goal: lambda+5 <= sec <= lambda+30)
 SIGMA_MIN_STEP = 0.05
 
 

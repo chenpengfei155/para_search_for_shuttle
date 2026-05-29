@@ -13,7 +13,8 @@ from result_dedup import pick_plateau_representatives, record_key
 SCRIPT_DIR = Path(__file__).resolve().parent
 PARAM_KEY_FIELDS = ("n", "q", "ell", "m", "sigma", "alpha_h")
 GOAL_LO_OFFSET = 5
-GOAL_HI_OFFSET = 12
+GOAL_HI_OFFSET = 30
+SIGMA_AT_LEAST_ONE_TAG = "sigma>=1"
 
 HTML_TEMPLATE = r"""<!doctype html>
 <html lang="en">
@@ -178,13 +179,21 @@ let updateCheckMode = 'headers';
 let updateAvailable = false;
 let lastUpdateCheckAt = 0;
 
-// Sort tags so target_security=* comes first, then rough, then lwe>*, sis_uf>*, sis_suf>*
+function isSecurityThresholdTag(t) {
+  return /^(lwe|sis_uf|sis_suf)>\d+$/.test(t);
+}
+
+// Sort tags so target_security=* comes first, then rough, then sigma>=1, then lwe>*, sis_uf>*, sis_suf>*
 function tagSortKey(t) {
   if (t.startsWith('target_security=')) return [0, parseInt(t.split('=')[1], 10)];
   if (t === 'rough') return [1, 0];
-  const order = { 'lwe': 2, 'sis_uf': 3, 'sis_suf': 4 };
-  const [prefix, thr] = t.split('>');
-  return [order[prefix] ?? 99, parseInt(thr, 10) || 0];
+  if (t === 'sigma>=1') return [2, 1];
+  if (isSecurityThresholdTag(t)) {
+    const order = { 'lwe': 3, 'sis_uf': 4, 'sis_suf': 5 };
+    const [prefix, thr] = t.split('>');
+    return [order[prefix] ?? 99, parseInt(thr, 10) || 0];
+  }
+  return [99, t];
 }
 
 function populateTagFilters() {
@@ -194,7 +203,9 @@ function populateTagFilters() {
   }
   const sortedTags = [...allTags].sort((a, b) => {
     const [pa, va] = tagSortKey(a), [pb, vb] = tagSortKey(b);
-    return pa !== pb ? pa - pb : va - vb;
+    if (pa !== pb) return pa - pb;
+    if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+    return String(va).localeCompare(String(vb));
   });
   tagFilterPrimaryDiv.innerHTML = '';
   tagFilterSecondaryDiv.innerHTML = '';
@@ -209,8 +220,8 @@ function populateTagFilters() {
 }
 
 function clearSecurityThresholdSelections() {
-  document.querySelectorAll('#tag-filter input[data-tag*=">"]:checked').forEach(cb => {
-    cb.checked = false;
+  document.querySelectorAll('#tag-filter input:checked').forEach(cb => {
+    if (isSecurityThresholdTag(cb.dataset.tag)) cb.checked = false;
   });
 }
 
@@ -364,7 +375,7 @@ function updateTagVisibility() {
     const cb = label.querySelector('input');
     const t = cb.dataset.tag;
     let visible = true;
-    if (t.includes('>') && checkedTargets.length > 0) {
+    if (isSecurityThresholdTag(t) && checkedTargets.length > 0) {
       const thr = parseInt(t.split('>')[1], 10);
       visible = relevantThrs.has(thr);
     }
@@ -657,10 +668,26 @@ def normalize_json_value(value):
   return value
 
 
+def enrich_html_tags(record: dict) -> dict:
+  enriched_record = dict(record)
+  tags = list(enriched_record.get("tags") or [])
+  inputs = enriched_record.get("inputs")
+  sigma = inputs.get("sigma") if isinstance(inputs, dict) else None
+
+  if isinstance(sigma, (int, float)) and sigma >= 1 and SIGMA_AT_LEAST_ONE_TAG not in tags:
+    tags.append(SIGMA_AT_LEAST_ONE_TAG)
+
+  if tags:
+    enriched_record["tags"] = tags
+
+  return enriched_record
+
+
 def render_html_rows(rows: list[dict], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     data_path = out_path.with_suffix(".data.json")
-    sanitized_rows = normalize_json_value(pick_plateau_representatives(rows))
+    html_rows = [enrich_html_tags(record) for record in pick_plateau_representatives(rows)]
+    sanitized_rows = normalize_json_value(html_rows)
     data_path.write_text(json.dumps(sanitized_rows, ensure_ascii=False), encoding="utf-8")
 
     html = HTML_TEMPLATE.replace("__DATA_URL__", data_path.name)

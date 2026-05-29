@@ -27,59 +27,40 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 
 
 # ====================================================================
-# FINAL MIN-Combined per (target, goal) — synced with memory.md & param_ideal.jsonl
-# 254 ideal params total. Run `extract_ideal.py` to regenerate.
-# Sigma-grid rule: never refine sigma with a step smaller than 0.05.
-# Structural jumps in q / alpha_h / (ell,m) remain fair game, but sub-0.05
-# sigma micro-tuning is now treated as search noise and should be rejected.
+# FINAL MIN-Combined per (target, goal) — synced with memory.md §2 & param_ideal.jsonl
+# Band = [target+5, target+30] (GOAL_HI_OFFSET=30, user 2026-05-29).
+# Sigma-grid rule: sigma must be a multiple of 0.05; no sub-0.05 micro-tuning.
 #
-# target=128 (n=256) Goal A (UF) ✅ Comb=1864
-#   q=7681 ell=3 m=2 sigma=0.510 alpha_h=128 → LWE=133.74 UF=139.87
-#   (Pk=848 Sign=1016; q<2^13 signed-int friendly)
+# --- 2.1 GENERAL (sigma>=0.5, on-grid) ---
+# t=128 A Comb=1866  q=4993  ell=3 m=2 s=0.50 a_h=128  L=144.83 UF=134.32 (Pk=848  Sn=1018)
+# t=128 B Comb=2090  q=3329  ell=3 m=3 s=0.55 a_h=512  L=144.81 sUF=135.20 (Pk=1168 Sn=922)
+# t=256 A Comb=3847  q=30977 ell=3 m=2 s=0.50 a_h=1024 L=266.01 UF=282.07 (Pk=1952 Sn=1895)
+# t=256 B Comb=3855  q=32257 ell=3 m=2 s=0.50 a_h=512  L=263.38 sUF=261.63 (Pk=1952 Sn=1903)
+# t=512 A Comb=7170  q=3002369 ell=3 m=1 s=0.50 a_h=128 L=522.68 UF=522.39 (Pk=2880 Sn=4290)
+# t=512 B Comb=9107  q=326657  ell=3 m=2 s=0.70 a_h=4096 L=518.01 sUF=520.05 (Pk=4928 Sn=4179)
 #
-# target=128 (n=256) Goal B (sUF) ✅ Comb=2397
-#   q=349697 ell=4 m=2 sigma=0.527 alpha_h=1024 → LWE=133.15 sUF=133.15
-#   (Pk=1232 Sign=1165; iter35-37 local refinement inside the 19-bit q bucket)
-#
-# target=256 (n=512) Goal A (UF) ✅ Comb=4059
-#   q=57089 ell=3 m=2 sigma=0.636 alpha_h=2048 → LWE=261.34 UF=261.34
-#   (Pk=2080 Sign=1979)
-#
-# target=256 (n=512) Goal B (sUF) ✅ Comb=4395
-#   q=133121 ell=3 m=2 sigma=0.907 alpha_h=1024 → LWE=261.02 sUF=261.05
-#   (Pk=2336 Sign=2059; first hit in the 18-bit q bucket)
-#
-# target=512 (n=1024) Goal A (UF) ✅ Comb=7269
-#   q=8058881 ell=3 m=1 sigma=0.6075 alpha_h=256 → LWE=517.13 UF=517.42
-#   (Pk=3008 Sign=4261; iter38 hit along the 8.06M ridge)
-#
-# target=512 (n=1024) Goal B (sUF) ✅ Comb=9092
-#   q=306689 ell=3 m=2 sigma=0.688 alpha_h=4096 → LWE=519.76 sUF=517.13
-#   (Pk=4928 Sign=4164; iter49 pushed the frontier into the next lower sign bucket)
+# --- 2.2 SIGMA>=1 (hard constraint, on-grid) ---
+# t=128 A Comb=2090  q=28289   ell=3 m=2 s=1.00 a_h=256  L=136.10 UF=137.82 (Pk=976  Sn=1114)
+# t=128 B Comb=2348  q=7681    ell=3 m=3 s=1.00 a_h=512  L=157.68 sUF=143.37 (Pk=1264 Sn=1084)
+# t=256 A Comb=4295  q=130817  ell=3 m=2 s=1.00 a_h=2048 L=267.18 UF=277.98 (Pk=2208 Sn=2087)
+# t=256 B Comb=4431  q=160001  ell=3 m=2 s=1.00 a_h=1024 L=261.70 sUF=263.68 (Pk=2336 Sn=2095)
+# t=512 A Comb=7938  q=32000513 ell=3 m=1 s=1.00 a_h=256 L=534.36 UF=521.22 (Pk=3264 Sn=4674)
+# t=512 B Comb=9343  q=495617  ell=3 m=2 s=1.00 a_h=4096 L=539.03 sUF=533.48 (Pk=4928 Sn=4415)
 # ====================================================================
 
 LOW_Q_128_GOAL_B_Q = [4481, 4993, 6529, 7297, 7681, 7937, 9473, 9601]
 DEAD_4392_256_GOAL_B_Q = [133121, 133633, 134401]
 
 PARAM_GROUPS: list[dict] = [
-    # Iter-65: small-step follow-up only.
-    # 1) Formalize the 128/Goal-B 13-bit coarse ridge after discarding the
-    #    sub-0.05 sigma probe file.
-    # 2) Recheck the 256/Goal-B 4392-byte dead line on the exact 0.90 grid so
-    #    the "no overlap" conclusion is backed by a clean jsonl artifact.
+    # Iter-82: t=512 Goal B, probe ell=2 m=2 (sign -~900 via dropped ell*n/2 term).
+    # Unlike 256A, dim-2048 LWE CAN reach 517 -- map L & sUF vs q to see if they
+    # overlap in [517,542]. Pk same as ell=3 m=2 (depends on m).
     {
-        "target_security": 128, "n": [256],
-        "q":       LOW_Q_128_GOAL_B_Q,
-        "ell":     [3], "m": [3],
-        "sigma":   [0.55, 0.60, 0.65],
-        "alpha_h": [1024],
-    },
-    {
-        "target_security": 256, "n": [512],
-        "q":       DEAD_4392_256_GOAL_B_Q,
-        "ell":     [3], "m": [2],
-        "sigma":   [0.90],
-        "alpha_h": [1024],
+        "target_security": 512, "n": [1024],
+        "q":       [32257, 65537, 133121, 326657, 658433],
+        "ell":     [2], "m": [2],
+        "sigma":   [0.70, 1.00],
+        "alpha_h": [1024, 4096],
     },
 ]
 
@@ -94,6 +75,12 @@ TAG_SOURCES = [
 EARLY_STOP_MARGIN = 10_000  # essentially off: rely on sub-group LWE pruning instead
 HEARTBEAT_SECONDS = 10
 SIGMA_MIN_STEP = 0.05
+
+# Acceptance band: target+GOAL_LO_OFFSET <= security <= target+GOAL_HI_OFFSET.
+# User goal (2026-05-29): lambda+5 <= sec <= lambda+30. Widened from +12 -> +30,
+# which reopens many regions previously pruned/declared dead for being "too secure".
+GOAL_LO_OFFSET = 5
+GOAL_HI_OFFSET = 30
 
 # Sub-group pruning: per (target, ell, m) probe LWE range.
 # After SUB_PROBE_MIN samples in a sub-group, if max(LWE_seen) < target+5 - SUB_PROBE_SLACK
@@ -376,8 +363,8 @@ def main() -> None:
                         not sub_pruned[sk]
                         and len(sub_lwe[sk]) >= SUB_PROBE_MIN
                     ):
-                        lo_goal = ts + 5
-                        hi_goal = ts + 12
+                        lo_goal = ts + GOAL_LO_OFFSET
+                        hi_goal = ts + GOAL_HI_OFFSET
                         seen_max = max(sub_lwe[sk])
                         seen_min = min(sub_lwe[sk])
                         unreachable_high = seen_max < lo_goal - SUB_PROBE_SLACK
