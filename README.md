@@ -23,7 +23,7 @@
 3. 标准差 $\sigma_1, \sigma_2$ 必须满足：
    
    $$
-   \sigma_1 \ge 0.5,\quad \sigma_2 \ge 0.5
+   \sigma_1 \ge 0.7,\quad \sigma_2 \ge 0.7
    $$
 
 4. 参数 $\alpha_h$ 必须为 2 的幂次。
