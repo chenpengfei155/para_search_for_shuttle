@@ -287,10 +287,14 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
     scale = R_SCALING[lambda_bits]
     r = math.ceil(scale * math.sqrt(alpha_1**2 - 1 + bk**2))
 
-    mu_s = n * (r / alpha_1) ** 2 + ell * n * r**2 + m * n * r**2
-    v_s = 2 * n * (r / alpha_1) ** 4 + 2 * ell * n * r**4 + 2 * m * n * r**4
+    mu_s = n * (r / alpha_1) ** 2 + ell * n * r**2 + m * n * r**2 + m * alpha_h**2 / 48
+    v_s = (
+        2 * n * (r / alpha_1) ** 4
+        + 2 * ell * n * r**4
+        + m * n * (2 * r**4 + alpha_h**2 * r**2 / 12 + alpha_h**4 / 2880)
+    )
     bs = math.sqrt(mu_s + 6.13 * math.sqrt(v_s))
-    bv = bs + math.sqrt(n * m) * (alpha_h / 4 + 1)
+    bv = bs
 
     sigma_h = 2 * r / alpha_h
     if sigma_h < 0.05:

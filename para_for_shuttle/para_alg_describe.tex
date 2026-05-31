@@ -36,7 +36,7 @@
 \begin{itemize}
   \item $n$ {\zhfont 取安全参数的 }$2${\zhfont 倍。}
   \item $q$ {\zhfont 为 }NTT{\zhfont 素域模数。}
-  \item $\sigma_1 \ge 0.5,\sigma_2 \ge 0.5${\zhfont 。}
+  \item $\sigma_1 \ge 0.7,\sigma_2 \ge 0.7${\zhfont 。}
   \item $\alpha_h$ {\zhfont 为 }$2${\zhfont 的幂。}
 \end{itemize}
 
@@ -53,7 +53,7 @@
     \lambda = \frac{n}{2}.
   \]
   \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
-  \item {\zhfont 若 $\sigma_1<0.5$ 或 $\sigma_2<0.5$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
+  \item {\zhfont 若 $\sigma_1<0.7$ 或 $\sigma_2<0.7$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
   \item \[
     B_k = \sqrt{1+ \ell n\sigma_1^2 + mn\sigma_2^2}.
   \]
@@ -70,17 +70,18 @@
     \end{cases}
   \]
   \item \[
-    \mu_s = n\left(\frac{r}{\alpha_1}\right)^2 + \ell nr^2 + mnr^2.
+    \mu_s = n\left(\frac{r}{\alpha_1}\right)^2 + \ell nr^2 + mnr^2+\frac{m\alpha_h^2}{48}.
   \]
   \item \[
-    V_s = 2n\left(\frac{r}{\alpha_1}\right)^4 + 2\ell nr^4 + 2mnr^4.
+    V_s = 2n\left(\frac{r}{\alpha_1}\right)^4 + 2\ell nr^4 + mn \left(2r^4 + \frac{\alpha_h^2 r^2}{12}
++\frac{\alpha_h^4}{2880}\right).
   \]
+
+
   \item \[
-    B_s = \sqrt{\mu_s + 6.13\sqrt{V_s}}.
+    B_v= B_s = \sqrt{\mu_s + 6.13\sqrt{V_s}}.
   \]
-  \item \[
-    B_v = B_s + \sqrt{nm}\left(\frac{\alpha_h}{4}+1\right).
-  \]
+
   \item {\zhfont 若 $2r/\alpha_h < 0.05$，则返回：$\alpha_h$ 太大，请调整。}
   \item {\zhfont 若 $\alpha_h$ 不是 $2$ 的幂次，则返回：$\alpha_h$ 不是 $2$ 的幂次。}
 \end{enumerate}

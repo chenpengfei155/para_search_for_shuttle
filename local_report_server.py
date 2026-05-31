@@ -18,7 +18,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPORT_DIR = SCRIPT_DIR / "results" / "local_test"
 JSONL_PATH = REPORT_DIR / "test_runs.jsonl"
 HTML_PATH = REPORT_DIR / "test_runs.html"
+META_PATH = REPORT_DIR / "test_runs.meta.json"
 DELETE_API_PATH = "/api/local-test/delete"
+LIVE_REFRESH_INTERVAL_MS = 2000
 
 
 def normalize_delete_key(item: list) -> tuple | None:
@@ -59,7 +61,14 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 def rebuild_report(rows: list[dict]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     write_jsonl(JSONL_PATH, rows)
-    render_html_rows(rows, HTML_PATH, delete_api_url=DELETE_API_PATH, collapse_plateaus=False)
+    render_html_rows(
+        rows,
+        HTML_PATH,
+        delete_api_url=DELETE_API_PATH,
+        collapse_plateaus=False,
+        meta_url=META_PATH.name,
+        live_refresh_interval_ms=LIVE_REFRESH_INTERVAL_MS,
+    )
 
 
 class LocalReportHandler(SimpleHTTPRequestHandler):

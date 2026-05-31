@@ -117,6 +117,7 @@ th.sel { background: #dde; }
   Refresh to load the latest results.
   <button id="refresh-page">refresh now</button>
 </div>
+<div id="report-status" class="load-status"></div>
 
 <div class="table-wrap">
 <table>
@@ -163,24 +164,28 @@ th.sel { background: #dde; }
 <script>
 const dataUrl = "__DATA_URL__";
 const deleteApiUrl = "__DELETE_API_URL__";
+const metaUrl = "__META_URL__";
+const liveRefreshIntervalMs = Number("__LIVE_REFRESH_INTERVAL_MS__") || 0;
+const liveMode = metaUrl.length > 0 && liveRefreshIntervalMs > 0;
 let records = [];
 const selected = new Set();
 let sortKey = null, sortAsc = true;
 let currentPage = 1;
 let pageSize = 100;
 let filteredRowsCache = [];
-const UPDATE_CHECK_INTERVAL_MS = 20 * 60 * 1000;
-const UPDATE_CHECK_LABEL = '20 minutes';
+const UPDATE_CHECK_INTERVAL_MS = liveMode ? liveRefreshIntervalMs : 20 * 60 * 1000;
+const UPDATE_CHECK_LABEL = liveMode ? `${Math.max(1, Math.round(liveRefreshIntervalMs / 1000))} seconds` : '20 minutes';
 const tagFilterDiv = document.getElementById('tag-filter');
 const tagFilterPrimaryDiv = document.getElementById('tag-filter-primary');
 const tagFilterSecondaryDiv = document.getElementById('tag-filter-secondary');
 const loadStatus = document.getElementById('load-status');
 const updateBanner = document.getElementById('update-banner');
 const refreshPageBtn = document.getElementById('refresh-page');
+const reportStatus = document.getElementById('report-status');
 let currentDataVersion = null;
-let updateCheckMode = 'headers';
 let updateAvailable = false;
 let lastUpdateCheckAt = 0;
+let currentReportMeta = null;
 
 function isSecurityThresholdTag(t) {
   return /^(lwe|sis_uf|sis_suf)>\d+$/.test(t);
@@ -257,6 +262,89 @@ function computeDataVersion(response, text) {
 
 function showUpdateBanner() {
   updateBanner.classList.add('visible');
+}
+
+function getSelectedTags() {
+  return [...document.querySelectorAll('#tag-filter input:checked')].map(i => i.dataset.tag);
+}
+
+function restoreSelectedTags(selectedTags) {
+  const selectedSet = new Set(selectedTags);
+  let restoredAny = false;
+  document.querySelectorAll('#tag-filter input').forEach(cb => {
+    const shouldCheck = selectedSet.has(cb.dataset.tag);
+    cb.checked = shouldCheck;
+    restoredAny = restoredAny || shouldCheck;
+  });
+  if (selectedSet.size > 0 && !restoredAny) {
+    const roughCb = document.querySelector('#tag-filter input[data-tag="rough"]');
+    if (roughCb) roughCb.checked = true;
+  }
+}
+
+function renderReportStatus() {
+  if (!liveMode) {
+    reportStatus.textContent = '';
+    return;
+  }
+
+  if (!currentReportMeta) {
+    reportStatus.textContent = 'Waiting for live progress...';
+    return;
+  }
+
+  const processedCount = currentReportMeta.processed_count ?? 0;
+  const taskCount = currentReportMeta.task_count ?? 0;
+  const state = currentReportMeta.state ?? 'running';
+  const updatedAt = currentReportMeta.updated_at ? ` Updated ${currentReportMeta.updated_at}.` : '';
+  reportStatus.textContent = `Run ${state}: processed ${processedCount}/${taskCount} combinations.${updatedAt}`;
+}
+
+function applyRecords(text, response, keepUiState) {
+  const selectedTags = keepUiState ? getSelectedTags() : null;
+  const matchMode = keepUiState ? document.querySelector('input[name=match]:checked').value : null;
+
+  currentDataVersion = computeDataVersion(response, text);
+  lastUpdateCheckAt = Date.now();
+  records = JSON.parse(text);
+  records.forEach((r, i) => {
+    r._idx = i;
+    r._tagsSet = new Set(r.tags || []);
+  });
+  selected.clear();
+  filteredRowsCache = records;
+  populateTagFilters();
+  if (selectedTags !== null) {
+    restoreSelectedTags(selectedTags);
+    if (matchMode) {
+      const modeInput = document.querySelector(`input[name=match][value="${matchMode}"]`);
+      if (modeInput) modeInput.checked = true;
+    }
+  }
+  updateTagVisibility();
+  render();
+}
+
+async function refreshReportMeta() {
+  if (!liveMode) return;
+  try {
+    const response = await fetch(`${metaUrl}${metaUrl.includes('?') ? '&' : '?'}_ts=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    currentReportMeta = JSON.parse(await response.text());
+    renderReportStatus();
+  } catch (err) {
+    console.error('Live progress refresh failed:', err);
+  }
+}
+
+async function refreshRecords(force = false) {
+  const response = await fetch(freshDataUrl(), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
+  const nextVersion = computeDataVersion(response, text);
+  if (!force && nextVersion === currentDataVersion) return false;
+  applyRecords(text, response, !force);
+  return true;
 }
 
 document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -575,21 +663,10 @@ async function init() {
     document.getElementById('delete-selected').style.display = 'none';
   }
   try {
-    const response = await fetch(freshDataUrl(), { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    currentDataVersion = computeDataVersion(response, text);
-    lastUpdateCheckAt = Date.now();
-    updateCheckMode = responseVersion(response) ? 'headers' : 'body';
-    records = JSON.parse(text);
-    records.forEach((r, i) => {
-      r._idx = i;
-      r._tagsSet = new Set(r.tags || []);
-    });
-    filteredRowsCache = records;
-    populateTagFilters();
-    updateTagVisibility();
-    render();
+    await refreshRecords(true);
+    if (liveMode) {
+      await refreshReportMeta();
+    }
     loadStatus.textContent = `Loaded ${records.length} record(s) from ${dataUrl}. Auto-checking for updates every ${UPDATE_CHECK_LABEL}.`;
   } catch (err) {
     console.error(err);
@@ -599,25 +676,22 @@ async function init() {
 }
 
 async function checkForUpdates() {
-  if (updateAvailable || !currentDataVersion) return;
+  if (!currentDataVersion) return;
+  if (liveMode) {
+    try {
+      await refreshReportMeta();
+      await refreshRecords(false);
+    } catch (err) {
+      console.error('Live report refresh failed:', err);
+    }
+    return;
+  }
+
+  if (updateAvailable) return;
   const now = Date.now();
   if (now - lastUpdateCheckAt < UPDATE_CHECK_INTERVAL_MS) return;
   lastUpdateCheckAt = now;
   try {
-    if (updateCheckMode === 'headers') {
-      const response = await fetch(freshDataUrl(), { method: 'HEAD', cache: 'no-store' });
-      if (!response.ok) return;
-      const nextVersion = responseVersion(response);
-      if (nextVersion) {
-        if (nextVersion !== currentDataVersion) {
-          updateAvailable = true;
-          showUpdateBanner();
-        }
-        return;
-      }
-      updateCheckMode = 'body';
-    }
-
     const response = await fetch(freshDataUrl(), { cache: 'no-store' });
     if (!response.ok) return;
     const text = await response.text();
@@ -654,6 +728,14 @@ def load_jsonl(path: Path) -> list[dict]:
             except json.JSONDecodeError:
                 continue
     return rows
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+  path.parent.mkdir(parents=True, exist_ok=True)
+  temp_path = path.with_name(f".{path.name}.tmp")
+  with temp_path.open("w", encoding="utf-8") as handle:
+    handle.write(text)
+  temp_path.replace(path)
 
 
 def dedupe_exact_records(rows: list[dict]) -> list[dict]:
@@ -769,16 +851,31 @@ def enrich_html_tags(record: dict) -> dict:
   return enriched_record
 
 
-def render_html_rows(rows: list[dict], out_path: Path, delete_api_url: str = "", collapse_plateaus: bool = True) -> None:
+def render_html_rows(
+  rows: list[dict],
+  out_path: Path,
+  delete_api_url: str = "",
+  collapse_plateaus: bool = True,
+  meta_url: str = "",
+  live_refresh_interval_ms: int = 0,
+  rewrite_html: bool = True,
+) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     data_path = out_path.with_suffix(".data.json")
     source_rows = pick_plateau_representatives(rows) if collapse_plateaus else rows
     html_rows = [enrich_html_tags(record) for record in source_rows]
     sanitized_rows = normalize_json_value(html_rows)
-    data_path.write_text(json.dumps(sanitized_rows, ensure_ascii=False), encoding="utf-8")
+    write_text_atomic(data_path, json.dumps(sanitized_rows, ensure_ascii=False))
 
-    html = HTML_TEMPLATE.replace("__DATA_URL__", data_path.name).replace("__DELETE_API_URL__", delete_api_url)
-    out_path.write_text(html, encoding="utf-8")
+    if rewrite_html or not out_path.exists():
+      html = (
+        HTML_TEMPLATE
+        .replace("__DATA_URL__", data_path.name)
+        .replace("__DELETE_API_URL__", delete_api_url)
+        .replace("__META_URL__", meta_url)
+        .replace("__LIVE_REFRESH_INTERVAL_MS__", str(live_refresh_interval_ms))
+      )
+      write_text_atomic(out_path, html)
     print(f"wrote {len(sanitized_rows)} records -> {out_path} (data: {data_path.name})")
 
 

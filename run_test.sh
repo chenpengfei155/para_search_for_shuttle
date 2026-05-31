@@ -80,7 +80,6 @@ ensure_server() {
 }
 
 cd "$SCRIPT_DIR"
-"$PYTHON_BIN" test.py "$@" >/dev/null
 ensure_server
 
 HOST="${WEBPAGE_HOST:-$(primary_ip)}"
@@ -89,3 +88,4 @@ if [[ -z "$HOST" ]]; then
 fi
 
 echo "http://$HOST:$PORT/$HTML_REL_PATH"
+exec "$PYTHON_BIN" test.py "$@"
