@@ -272,9 +272,9 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
         raise ParameterValidationError("l和m必须为正整数")
     if alpha_h <= 0:
         raise ParameterValidationError("alpha_h必须为正整数")
-    if sigma_1 < 0.5:
+    if sigma_1 < 0.7:
         raise ParameterValidationError("sigma_1不合法，离散高斯中分布标准差太小")
-    if sigma_2 < 0.5:
+    if sigma_2 < 0.7:
         raise ParameterValidationError("sigma_2不合法，离散高斯中分布标准差太小")
 
     lambda_bits = n // 2
