@@ -1,12 +1,27 @@
-% !TeX program = lualatex
 \documentclass[11pt]{article}
 
 \usepackage[a4paper,margin=1in]{geometry}
 \usepackage{fontspec}
 \usepackage{amsmath,amssymb,booktabs}
 
-\setmainfont{Latin Modern Roman}
-\newfontfamily\zhfont[BoldFont={Droid Sans Fallback}]{Droid Sans Fallback}
+\IfFontExistsTF{Latin Modern Roman}{\setmainfont{Latin Modern Roman}}{}
+\IfFontExistsTF{Noto Serif CJK SC}{
+  \newfontfamily\zhfont{Noto Serif CJK SC}
+}{
+  \IfFontExistsTF{Source Han Serif SC}{
+    \newfontfamily\zhfont{Source Han Serif SC}
+  }{
+    \IfFontExistsTF{FandolSong-Regular}{
+      \newfontfamily\zhfont{FandolSong-Regular}
+    }{
+      \IfFontExistsTF{Droid Sans Fallback}{
+        \newfontfamily\zhfont{Droid Sans Fallback}
+      }{
+        \newfontfamily\zhfont{FandolSong-Regular.otf}
+      }
+    }
+  }
+}
 \newcommand{\zh}[1]{{\zhfont #1}}
 
 \setlength{\parindent}{0pt}
@@ -25,7 +40,7 @@
 {\zhfont 本节概述 }\texttt{shuttle}{\zhfont 参数搜索算法的目标、输入与输出。}
 
 \begin{itemize}
-  \item {\zhfont 输入参数为 }$q,n,\ell,m,\sigma_1,\sigma_2,\alpha_h${\zhfont 。}
+  \item {\zhfont 输入参数为 }$q,n,\ell,m,\sigma_1,\sigma_2,\alpha_h,\alpha_b${\zhfont 。}
   \item {\zhfont 算法首先检查输入是否合法。}
   \item {\zhfont 若输入合法，则计算 }$\mathrm{PkBytes}${\zhfont 、}$\mathrm{SignBytes}$ {\zhfont 和 }$\mathrm{CombinedBytes}${\zhfont 。}
   \item {\zhfont 随后基于 }LWE{\zhfont 与 }SIS{\zhfont 模型给出相应的安全估计。}
@@ -44,7 +59,7 @@
 
 
 \section*{\zh{输入}}
-{\zhfont 输入为 $n,q,\ell,m,\sigma_1,\sigma_2,\alpha_h$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
+{\zhfont 输入为 $n,q,\ell,m,\sigma_1,\sigma_2,\alpha_h,\alpha_b$。其中手稿中的字母 $l$ 在本文统一记为 $\ell$，以避免与对数符号 $\ln$ 混淆。}
 
 \section*{\zh{算法步骤}}
 \begin{enumerate}
@@ -54,28 +69,50 @@
   \]
   \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
   \item {\zhfont 若 $\sigma_1<0.7$ 或 $\sigma_2<0.7$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
-  \item \[
-    B_k = \sqrt{1+ \ell n\sigma_1^2 + mn\sigma_2^2}.
+  
+  \item {\zhfont 若 $\alpha_b$ 不是 $1,2,4,8$ 中的一个，则返回：$\alpha_b$ 不合法，必须是 $1,2,4,8$ 中的一个。}
+  \[
+    \sigma_b =
+    \begin{cases}
+      0, & \alpha_b = 1,\\[0.3em]
+      1/2, & \alpha_b = 2,\\[0.3em]
+      3/2, & \alpha_b = 4,\\[0.3em]
+      11/2, & \alpha_b = 8.
+    \end{cases}
   \]
+
+  \item
+  \[
+    \alpha_1 = \sqrt{n\sigma_1^2(\sigma_2^2+\sigma_b)} 
+  \]
+  \[
+    \alpha_s =  \sqrt{\sigma_2^2+\sigma_b} 
+  \]
+  \[
+    \alpha_e =  \sigma_1 
+  \]
+
+
   \item \[
-    \alpha_1 = 2^{\lfloor \log_2(\sqrt{\frac{\ell n \sigma_1^2 + mn \sigma_2^2}{\ell+m}})\rfloor}.
+    B_k = \sqrt{\alpha_1^2 + \alpha_s^2 \ell n\sigma_1^2 + \alpha_e^2 mn\sigma_2^2}.
   \]
   \item {\zhfont 根据 $\lambda$ 取不同常数，计算}
   \[
     r=
     \begin{cases}
-      \left\lceil 2.75\sqrt{\alpha_1^2- 1 + B_k^2}\right\rceil, & \lambda=128,\\[0.5em]
-      \left\lceil 2.78\sqrt{\alpha_1^2 -1+ B_k^2}\right\rceil, & \lambda=256,\\[0.5em]
-      \left\lceil 2.81\sqrt{\alpha_1^2 -1+ B_k^2}\right\rceil, & \lambda=512.
+      \left\lceil 2.75B_k\right\rceil, & \lambda=128,\\[0.5em]
+      \left\lceil 2.78B_k\right\rceil, & \lambda=256,\\[0.5em]
+      \left\lceil 2.81B_k\right\rceil, & \lambda=512.
     \end{cases}
   \]
   \item \[
-    \mu_s = n\left(\frac{r}{\alpha_1}\right)^2 + \ell nr^2 + mnr^2+\frac{m\alpha_h^2}{48}.
-  \]
-  \item \[
-    V_s = 2n\left(\frac{r}{\alpha_1}\right)^4 + 2\ell nr^4 + mn \left(2r^4 + \frac{\alpha_h^2 r^2}{12}
-+\frac{\alpha_h^4}{2880}\right).
-  \]
+\mu_s = n (\frac{r}{\alpha_1})^2 + \ell n (\frac{r}{\alpha_s})^2 + mn(\frac{r}{\alpha_e})^2 + \frac{m \alpha_h^2}{48}
+\]
+
+  \item 
+\[
+V_s = 2n (\frac{r}{\alpha_1})^4 + 2\ell n (\frac{r}{\alpha_s})^4 + mn(2(\frac{r}{\alpha_e})^4 + \frac{\alpha_h^2  (\frac{r}{\alpha_e})^2}{12} +\frac{m \alpha_h^4}{2880})
+\]
 
 
   \item \[
@@ -108,13 +145,13 @@
 
 \section*{\zh{尺寸公式}}
 \[
-\mathrm{PkBytes} = \frac{\lambda}{8} + \left\lceil\frac{nm\lceil\log_2 q\rceil}{8}\right\rceil.
+\mathrm{PkBytes} = \frac{\lambda}{8} + \left\lceil\frac{nm\lceil\log_2 \frac{q}{\alpha_b}\rceil}{8}\right\rceil.
 \]
 
 {\zhfont 按图片中的定义，先记}
 
 \[
-\sigma_h := \frac{2r}{\alpha_h}.
+\sigma_h := \frac{2r}{\alpha_h \cdot \alpha_e}.
 \]
 
 \[
@@ -132,7 +169,7 @@ H_h=
 {\zhfont 因为当前算法里种子贡献写作 $\lambda/8$ 字节，所以与图片中的 }SeedBytes{\zhfont 记号等价地写成，并对最终字节数向上取整：}
 
 \[
-\mathrm{SignBytes} = \left\lceil \frac{\lambda + \dfrac{n}{2}\log_2\!\left(2\pi e\left(\dfrac{r}{\alpha_1}\right)^2\right) + \dfrac{\ell n}{2}\log_2\!\left(2\pi e r^2\right) + nmH_h}{8} \right\rceil.
+\mathrm{SignBytes} = \left\lceil \frac{\lambda + \dfrac{n}{2}\log_2\!\left(2\pi e\left(\dfrac{r}{\alpha_1}\right)^2\right) + \dfrac{\ell n}{2}\log_2\!\left(2\pi e (\frac{r}{\alpha_s})^2\right) + nmH_h}{8} \right\rceil.
 \]
 
 \section*{\zh{组合尺寸与安全估计}}

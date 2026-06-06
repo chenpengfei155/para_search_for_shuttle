@@ -18,6 +18,7 @@ def add_estimator_paths() -> None:
     candidates = [
         SCRIPT_DIR / ".deps" / "lattice-estimator",
         SCRIPT_DIR.parent / ".deps" / "lattice-estimator",
+        SCRIPT_DIR.parent / "lattice-estimator",
         SCRIPT_DIR.parent.parent / ".deps" / "lattice-estimator",
     ]
     for candidate in candidates:
@@ -31,17 +32,13 @@ add_estimator_paths()
 
 try:
     from estimator import LWE, ND, SIS
-    from estimator.lwe_primal import PrimalUSVP
     from estimator.lwe_parameters import LWEParameters
-    from estimator.reduction import RC
     from estimator.sis_parameters import SISParameters
 
     ESTIMATOR_AVAILABLE = True
 except Exception:
     LWE = None
     ND = None
-    PrimalUSVP = None
-    RC = None
     SIS = None
     LWEParameters = None
     SISParameters = None
@@ -54,6 +51,12 @@ R_SCALING = {
     512: 2.81,
 }
 ALLOWED_N = {256, 512, 1024}
+SIGMA_B = {
+    1: 0.0,
+    2: 1 / 2,
+    4: 3 / 2,
+    8: 11 / 2,
+}
 
 
 class ParameterValidationError(ValueError):
@@ -89,9 +92,13 @@ class AlgorithmResult:
     sigma_1: float
     sigma_2: float
     alpha_h: int
+    alpha_b: int
+    sigma_b: float
     lambda_bits: int
     bk: float
-    alpha_1: int
+    alpha_1: float
+    alpha_s: float
+    alpha_e: float
     r: int
     mu_s: float
     v_s: float
@@ -149,52 +156,12 @@ def extract_rop_bits(rop: Any) -> float:
     return math.log2(value)
 
 
-def usvp_embedding_sample_count(lwe_param: Any) -> int:
-    if lwe_param.Xs <= lwe_param.Xe:
-        return lwe_param.m + lwe_param.n
-    return lwe_param.m
-
-
-def robust_usvp_bits(lwe_param: Any | None) -> float | None:
-    if lwe_param is None:
-        return None
-
-    embedding_m = usvp_embedding_sample_count(lwe_param)
-    low = 40
-    high = embedding_m
-    best_cost = None
-
-    while low <= high:
-        beta = (low + high) // 2
-        cost = PrimalUSVP.cost_gsa(
-            beta=beta,
-            params=lwe_param,
-            m=embedding_m,
-            red_cost_model=RC.ADPS16,
-        )
-        if str(cost["rop"]) == "+Infinity":
-            low = beta + 1
-        else:
-            best_cost = cost
-            high = beta - 1
-
-    if best_cost is None:
-        return math.inf
-    return extract_rop_bits(best_cost["rop"])
-
-
 def is_power_of_two(value: int) -> bool:
     return value > 0 and (value & (value - 1)) == 0
 
 
-def floor_power_of_two(value: float) -> int:
-    if value <= 1:
-        return 1
-    return 1 << math.floor(math.log2(value))
-
-
-def hint_entropy(r: int, alpha_h: int) -> tuple[float, str, float, float]:
-    sigma_h = 2 * r / alpha_h
+def hint_entropy(r: int, alpha_h: int, alpha_e: float) -> tuple[float, str, float, float]:
+    sigma_h = 2 * r / (alpha_h * alpha_e)
     a_h = 1 + 2 * math.exp(-1 / (2 * sigma_h**2)) + 2 * math.exp(-2 / sigma_h**2)
 
     if sigma_h >= 1:
@@ -247,7 +214,7 @@ def estimate_lwe_security_bits(lwe_param: Any | None) -> tuple[float | None, flo
         return None, None, None, None
 
     result = LWE.estimate.rough(lwe_param, quiet=True)
-    usvp_bits = robust_usvp_bits(lwe_param)
+    usvp_bits = extract_rop_bits(result.get("usvp", {}).get("rop"))
     dual_hybrid_bits = extract_rop_bits(result.get("dual_hybrid", {}).get("rop"))
 
     if dual_hybrid_bits <= usvp_bits:
@@ -263,7 +230,16 @@ def estimate_sis_security_bits(sis_param: Any | None) -> float | None:
     return extract_rop_bits(result.get("lattice", {}).get("rop"))
 
 
-def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2: float, alpha_h: int) -> AlgorithmArtifacts:
+def compute_parameters(
+    n: int,
+    q: int,
+    ell: int,
+    m: int,
+    sigma_1: float,
+    sigma_2: float,
+    alpha_h: int,
+    alpha_b: int,
+) -> AlgorithmArtifacts:
     if n not in ALLOWED_N:
         raise ParameterValidationError("n不合法")
     if q <= 1:
@@ -276,33 +252,52 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
         raise ParameterValidationError("sigma_1不合法，离散高斯中分布标准差太小")
     if sigma_2 < 0.7:
         raise ParameterValidationError("sigma_2不合法，离散高斯中分布标准差太小")
+    if alpha_b not in SIGMA_B:
+        raise ParameterValidationError("alpha_b不合法，必须是1,2,4,8中的一个")
 
     lambda_bits = n // 2
     if (q - 1) % lambda_bits != 0:
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
-    bk = math.sqrt(1 + ell * n * sigma_1**2 + m * n * sigma_2**2)
-    alpha_1 = floor_power_of_two(math.sqrt((ell * n * sigma_1**2 + m * n * sigma_2**2) / (ell + m)))
+    sigma_b = SIGMA_B[alpha_b]
+    alpha_1 = math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b))
+    alpha_s = math.sqrt(sigma_2**2 + sigma_b)
+    alpha_e = sigma_1
+    bk = math.sqrt(
+        alpha_1**2
+        + alpha_s**2 * ell * n * sigma_1**2
+        + alpha_e**2 * m * n * sigma_2**2
+    )
 
     scale = R_SCALING[lambda_bits]
-    r = math.ceil(scale * math.sqrt(alpha_1**2 - 1 + bk**2))
+    r = math.ceil(scale * bk)
 
-    mu_s = n * (r / alpha_1) ** 2 + ell * n * r**2 + m * n * r**2 + m * alpha_h**2 / 48
+    mu_s = (
+        n * (r / alpha_1) ** 2
+        + ell * n * (r / alpha_s) ** 2
+        + m * n * (r / alpha_e) ** 2
+        + m * alpha_h**2 / 48
+    )
     v_s = (
         2 * n * (r / alpha_1) ** 4
-        + 2 * ell * n * r**4
-        + m * n * (2 * r**4 + alpha_h**2 * r**2 / 12 + alpha_h**4 / 2880)
+        + 2 * ell * n * (r / alpha_s) ** 4
+        + m
+        * n
+        * (
+            2 * (r / alpha_e) ** 4
+            + alpha_h**2 * (r / alpha_e) ** 2 / 12
+            + m * alpha_h**4 / 2880
+        )
     )
     bs = math.sqrt(mu_s + 6.13 * math.sqrt(v_s))
     bv = bs
 
-    sigma_h = 2 * r / alpha_h
-    if sigma_h < 0.05:
+    if 2 * r / alpha_h < 0.05:
         raise ParameterValidationError("alpha_h太大，请调整")
     if not is_power_of_two(alpha_h):
         raise ParameterValidationError("alpha_h不是2的幂次")
 
-    hh, hh_regime, sigma_h, a_h = hint_entropy(r, alpha_h)
+    hh, hh_regime, sigma_h, a_h = hint_entropy(r, alpha_h, alpha_e)
 
     lwe_spec = LWEParameterSpec(
         n=ell * n,
@@ -329,11 +324,11 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
         tag=None,
     )
 
-    pk_bytes = lambda_bits // 8 + math.ceil(n * m * math.ceil(math.log2(q)) / 8)
+    pk_bytes = lambda_bits // 8 + math.ceil(n * m * math.ceil(math.log2(q / alpha_b)) / 8)
     sign_bytes_formula = (
         lambda_bits
         + n / 2 * math.log2(2 * math.pi * math.e * (r / alpha_1) ** 2)
-        + ell * n / 2 * math.log2(2 * math.pi * math.e * r**2)
+        + ell * n / 2 * math.log2(2 * math.pi * math.e * (r / alpha_s) ** 2)
         + n * m * hh
     ) / 8
     sign_bytes = math.ceil(sign_bytes_formula)
@@ -354,9 +349,13 @@ def compute_parameters(n: int, q: int, ell: int, m: int, sigma_1: float, sigma_2
         sigma_1=sigma_1,
         sigma_2=sigma_2,
         alpha_h=alpha_h,
+        alpha_b=alpha_b,
+        sigma_b=sigma_b,
         lambda_bits=lambda_bits,
         bk=bk,
         alpha_1=alpha_1,
+        alpha_s=alpha_s,
+        alpha_e=alpha_e,
         r=r,
         mu_s=mu_s,
         v_s=v_s,
@@ -393,6 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sigma-1", type=float, required=True, dest="sigma_1")
     parser.add_argument("--sigma-2", type=float, required=True, dest="sigma_2")
     parser.add_argument("--alpha-h", type=int, required=True, dest="alpha_h")
+    parser.add_argument("--alpha-b", type=int, required=True, dest="alpha_b")
     parser.add_argument("--indent", type=int, default=2)
     return parser
 
@@ -409,6 +409,7 @@ def main() -> int:
             sigma_1=args.sigma_1,
             sigma_2=args.sigma_2,
             alpha_h=args.alpha_h,
+            alpha_b=args.alpha_b,
         )
     except ParameterValidationError as exc:
         print(str(exc), file=sys.stderr)
