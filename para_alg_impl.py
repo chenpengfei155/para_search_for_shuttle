@@ -51,12 +51,6 @@ R_SCALING = {
     512: 2.81,
 }
 ALLOWED_N = {256, 512, 1024}
-SIGMA_B = {
-    1: 0.0,
-    2: 1 / 2,
-    4: 3 / 2,
-    8: 11 / 2,
-}
 
 
 class ParameterValidationError(ValueError):
@@ -160,6 +154,12 @@ def is_power_of_two(value: int) -> bool:
     return value > 0 and (value & (value - 1)) == 0
 
 
+def compute_sigma_b(alpha_b: int) -> float:
+    if alpha_b == 1:
+        return 0.0
+    return (4 ** int(math.log2(alpha_b)) + 2) / 12
+
+
 def hint_entropy(r: int, alpha_h: int, alpha_e: float) -> tuple[float, str, float, float]:
     sigma_h = 2 * r / (alpha_h * alpha_e)
     a_h = 1 + 2 * math.exp(-1 / (2 * sigma_h**2)) + 2 * math.exp(-2 / sigma_h**2)
@@ -252,14 +252,14 @@ def compute_parameters(
         raise ParameterValidationError("sigma_1不合法，离散高斯中分布标准差太小")
     if sigma_2 < 0.7:
         raise ParameterValidationError("sigma_2不合法，离散高斯中分布标准差太小")
-    if alpha_b not in SIGMA_B:
-        raise ParameterValidationError("alpha_b不合法，必须是1,2,4,8中的一个")
+    if not is_power_of_two(alpha_b):
+        raise ParameterValidationError("alpha_b不合法，必须是2的幂次")
 
     lambda_bits = n // 2
     if (q - 1) % lambda_bits != 0:
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
-    sigma_b = SIGMA_B[alpha_b]
+    sigma_b = compute_sigma_b(alpha_b)
     alpha_1 = math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b))
     alpha_s = math.sqrt(sigma_2**2 + sigma_b)
     alpha_e = sigma_1
