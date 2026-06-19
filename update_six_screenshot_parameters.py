@@ -19,6 +19,9 @@ from para_alg_impl import ParameterValidationError, compute_parameters
 MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 MAIN = "{" + MAIN_NS + "}"
 REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+XR = "{http://schemas.microsoft.com/office/spreadsheetml/2014/revision}"
+X14AC = "{http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac}"
 NS = {"main": MAIN_NS}
 
 ET.register_namespace("", MAIN_NS)
@@ -43,7 +46,11 @@ OUTPUT_HEADERS = [
     "v_s",
     "bs",
     "bv",
+    "sigma_h",
+    "a_h",
+    "hh",
 ]
+ERROR_HEADER = "validation_error"
 
 
 @dataclass(frozen=True)
@@ -120,7 +127,8 @@ def worksheet_paths(zf: ZipFile) -> list[tuple[str, str]]:
         name = sheet.attrib["name"]
         rid = sheet.attrib[REL + "id"]
         target = rid_to_target[rid]
-        sheet_path = "xl/" + target.lstrip("/") if not target.startswith("xl/") else target
+        normalized_target = target.lstrip("/")
+        sheet_path = normalized_target if normalized_target.startswith("xl/") else "xl/" + normalized_target
         sheets.append((name, sheet_path))
     return sheets
 
@@ -198,12 +206,18 @@ def finite_number(value: float | int | None) -> float | int | None:
     return value
 
 
-def compute_one(params: tuple[int, int, int, int, float, float, int, int]) -> tuple[tuple[int, int, int, int, float, float, int, int], dict[str, float | int | None]]:
+def compute_one(
+    params: tuple[int, int, int, int, float, float, int, int],
+) -> tuple[
+    tuple[int, int, int, int, float, float, int, int],
+    dict[str, float | int | None],
+    str | None,
+]:
     n, q, ell, m, sigma_1, sigma_2, alpha_h, alpha_b = params
     try:
         result = compute_parameters(n, q, ell, m, sigma_1, sigma_2, alpha_h, alpha_b).result
     except ParameterValidationError as exc:
-        raise RuntimeError(f"invalid parameters {params}: {exc}") from exc
+        return params, {header: None for header in OUTPUT_HEADERS}, str(exc)
 
     values: dict[str, float | int | None] = {
         "sigma_b": result.sigma_b,
@@ -222,8 +236,11 @@ def compute_one(params: tuple[int, int, int, int, float, float, int, int]) -> tu
         "v_s": result.v_s,
         "bs": result.bs,
         "bv": result.bv,
+        "sigma_h": result.sigma_h,
+        "a_h": result.a_h,
+        "hh": result.hh,
     }
-    return params, values
+    return params, values, None
 
 
 def update_numeric_cell(row: ET.Element, col: str, row_number: int, value: float | int | None) -> None:
@@ -259,21 +276,64 @@ def update_numeric_cell(row: ET.Element, col: str, row_number: int, value: float
     value_node.text = str(value)
 
 
-def update_sheet(root: ET.Element, output_by_row: dict[int, dict[str, float | int | None]], shared_strings: list[str]) -> None:
+def update_text_cell(row: ET.Element, col: str, row_number: int, value: str | None) -> None:
+    ref = f"{col}{row_number}"
+    cells = row.findall("main:c", NS)
+    cell = next((candidate for candidate in cells if candidate.attrib.get("r") == ref), None)
+    if cell is None:
+        cell = ET.Element(MAIN + "c", {"r": ref})
+        target_index = col_to_index(col)
+        inserted = False
+        for idx, existing in enumerate(cells):
+            existing_col, _ = split_cell_ref(existing.attrib["r"])
+            if col_to_index(existing_col) > target_index:
+                row.insert(idx, cell)
+                inserted = True
+                break
+        if not inserted:
+            row.append(cell)
+
+    for child in list(cell):
+        cell.remove(child)
+    if value is None:
+        cell.attrib.pop("t", None)
+        return
+
+    cell.attrib["t"] = "inlineStr"
+    inline = ET.SubElement(cell, MAIN + "is")
+    text = ET.SubElement(inline, MAIN + "t")
+    text.text = value
+
+
+def update_sheet(
+    root: ET.Element,
+    output_by_row: dict[int, tuple[dict[str, float | int | None], str | None]],
+    shared_strings: list[str],
+) -> None:
     sheet_data = root.find("main:sheetData", NS)
     rows = sheet_data.findall("main:row", NS)
     if not rows:
         return
     headers = read_header(rows[0], shared_strings)
+    if ERROR_HEADER not in headers:
+        headers[ERROR_HEADER] = "AC"
+        update_text_cell(rows[0], "AC", 1, ERROR_HEADER)
     rows_by_number = {int(row.attrib["r"]): row for row in rows}
 
-    for row_number, values in output_by_row.items():
+    for row_number, (values, error) in output_by_row.items():
         row = rows_by_number[row_number]
         for header in OUTPUT_HEADERS:
             update_numeric_cell(row, headers[header], row_number, values[header])
+        update_text_cell(row, headers[ERROR_HEADER], row_number, error)
+
+    dimension = root.find("main:dimension", NS)
+    if dimension is not None:
+        max_row = max(rows_by_number)
+        dimension.attrib["ref"] = f"A1:AC{max_row}"
 
 
 def write_workbook(xlsx_path: Path, sheet_roots: dict[str, ET.Element]) -> None:
+    original_mode = xlsx_path.stat().st_mode & 0o777
     fd, temp_name = tempfile.mkstemp(suffix=".xlsx", dir=str(xlsx_path.parent))
     os.close(fd)
     temp_path = Path(temp_name)
@@ -285,9 +345,17 @@ def write_workbook(xlsx_path: Path, sheet_roots: dict[str, ET.Element]) -> None:
                     continue
                 dst.writestr(item, src.read(item.filename))
             for sheet_path, root in sheet_roots.items():
+                # ElementTree drops unused namespace declarations but leaves
+                # their prefixes in mc:Ignorable, which makes Excel repair the file.
+                root.attrib.pop(MC + "Ignorable", None)
+                root.attrib.pop(XR + "uid", None)
+                sheet_format = root.find("main:sheetFormatPr", NS)
+                if sheet_format is not None:
+                    sheet_format.attrib.pop(X14AC + "dyDescent", None)
                 xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
                 dst.writestr(sheet_path, xml)
         shutil.move(str(temp_path), xlsx_path)
+        xlsx_path.chmod(original_mode)
     finally:
         if temp_path.exists():
             temp_path.unlink()
@@ -304,17 +372,24 @@ def main() -> int:
     workers = max(1, min(args.workers, os.cpu_count() or 1))
     print(f"rows={len(tasks)} unique_parameter_sets={len(unique_params)} workers={workers}")
 
-    computed: dict[tuple[int, int, int, int, float, float, int, int], dict[str, float | int | None]] = {}
+    computed: dict[
+        tuple[int, int, int, int, float, float, int, int],
+        tuple[dict[str, float | int | None], str | None],
+    ] = {}
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(compute_one, params): params for params in unique_params}
         done = 0
         for future in as_completed(futures):
-            params, values = future.result()
-            computed[params] = values
+            params, values, error = future.result()
+            computed[params] = (values, error)
             done += 1
-            print(f"computed {done}/{len(unique_params)}: {params}", flush=True)
+            status = f"invalid: {error}" if error else "ok"
+            print(f"computed {done}/{len(unique_params)}: {params} [{status}]", flush=True)
 
-    output_by_sheet: dict[str, dict[int, dict[str, float | int | None]]] = {}
+    output_by_sheet: dict[
+        str,
+        dict[int, tuple[dict[str, float | int | None], str | None]],
+    ] = {}
     for task in tasks:
         output_by_sheet.setdefault(task.sheet_path, {})[task.row_number] = computed[task.params]
 
