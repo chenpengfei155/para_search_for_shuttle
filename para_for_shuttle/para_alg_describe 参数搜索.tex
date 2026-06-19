@@ -79,15 +79,15 @@
       \frac{4^{\log_2 \alpha_b}+2}{12} ,& \alpha_b \ge 2.
     \end{cases}
   \]
-  \item
+  \item {\zhfont 下式中的方括号表示四舍五入取整。}
   \[
-    \alpha_1 = \left\lceil 10\sqrt{n\sigma_1^2(\sigma_2^2+\sigma_b)} \right\rceil
+    \alpha_1 = \left[ 10\sqrt{n\sigma_1^2(\sigma_2^2+\sigma_b)} \right]
   \]
   \[
-    \alpha_s = \left\lceil 10\sqrt{\sigma_2^2+\sigma_b} \right\rceil
+    \alpha_s = \left[ 10\sqrt{\sigma_2^2+\sigma_b} \right]
   \]
   \[
-    \alpha_e = \left\lceil 10\sigma_1 \right\rceil
+    \alpha_e = \left[ 10\sigma_1 \right]
   \]
 
 
@@ -119,7 +119,7 @@ V_s = 2n (\frac{r}{\alpha_1})^4 + 2\ell n (\frac{r}{\alpha_s})^4 + mn(2(\frac{r}
 
   \item {\zhfont 若 $2r/\alpha_h < 0.05$或者$\alpha_h$ 不整除 $2(q-1)$，则返回：$\alpha_h$ 太大，请调整。}
   \item {\zhfont 若 $\alpha_h$ 不是 $2$ 的幂次，则返回：$\alpha_h$ 不是 $2$ 的幂次。}
-  \item {\zhfont 若 $q$ 小于 $2(q-1)$，则返回：$\alpha_h$ 不整除 $2(q-1)$。}
+  \item {\zhfont 若 $q$ 小于 $B_v$，则返回：$q$ 小于 $B_v$。}
 \end{enumerate}
   
 \section*{\zh{参数对象构造}}

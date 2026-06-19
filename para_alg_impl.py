@@ -154,6 +154,12 @@ def is_power_of_two(value: int) -> bool:
     return value > 0 and (value & (value - 1)) == 0
 
 
+def round_half_up(value: float) -> int:
+    if value >= 0:
+        return math.floor(value + 0.5)
+    return math.ceil(value - 0.5)
+
+
 def compute_sigma_b(alpha_b: int) -> float:
     if alpha_b == 1:
         return 0.0
@@ -260,9 +266,9 @@ def compute_parameters(
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
     sigma_b = compute_sigma_b(alpha_b)
-    alpha_1 = math.ceil(10 * math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b)))
-    alpha_s = math.ceil(10 * math.sqrt(sigma_2**2 + sigma_b))
-    alpha_e = math.ceil(10 * sigma_1)
+    alpha_1 = round_half_up(10 * math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b)))
+    alpha_s = round_half_up(10 * math.sqrt(sigma_2**2 + sigma_b))
+    alpha_e = round_half_up(10 * sigma_1)
     bk = math.sqrt(
         alpha_1**2
         + alpha_s**2 * ell * n * sigma_1**2
@@ -296,6 +302,8 @@ def compute_parameters(
         raise ParameterValidationError("alpha_h太大，请调整")
     if not is_power_of_two(alpha_h):
         raise ParameterValidationError("alpha_h不是2的幂次")
+    if q < bv:
+        raise ParameterValidationError("q小于B_v")
 
     hh, hh_regime, sigma_h, a_h = hint_entropy(r, alpha_h, alpha_e)
 
