@@ -1,3 +1,4 @@
+% !TEX program = lualatex
 \documentclass[11pt]{article}
 
 \usepackage[a4paper,margin=1in]{geometry}
@@ -51,7 +52,7 @@
 \begin{itemize}
   \item $n$ {\zhfont 取安全参数的 }$2${\zhfont 倍。}
   \item $q$ {\zhfont 为 }NTT{\zhfont 素域模数。}
-  \item $\sigma_1 \ge 0.7,\sigma_2 \ge 0.7${\zhfont 。}
+  \item $\sigma_1 \ge 0.81,\sigma_2 \ge 0.81${\zhfont 。}
   \item $\alpha_h$ {\zhfont 为 }$2${\zhfont 的幂。}
 \end{itemize}
 
@@ -68,28 +69,25 @@
     \lambda = \frac{n}{2}.
   \]
   \item {\zhfont 若 $\lambda\nmid(q-1)$，则返回：$q$ 不合法，$n/2$ 不整除 $(q-1)$，$q$ 不是 }NTT{\zhfont 素域。}
-  \item {\zhfont 若 $\sigma_1<0.7$ 或 $\sigma_2<0.7$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
+  \item {\zhfont 若 $\sigma_1<0.81$ 或 $\sigma_2<0.81$，则返回：$\sigma_1,\sigma_2$ 不合法，离散高斯中分布标准差太小。}
   
-  \item {\zhfont 若 $\alpha_b$ 不是 $1,2,4,8$ 中的一个，则返回：$\alpha_b$ 不合法，必须是 $1,2,4,8$ 中的一个。}
+  \item {\zhfont 若 $\alpha_b$ 不是 $2$ 的非负整数次幂，则返回：$\alpha_b$ 不合法，必须是二的幂次。}
   \[
-    \sigma_b =
+  \sigma_b = 
     \begin{cases}
       0, & \alpha_b = 1,\\[0.3em]
-      1/2, & \alpha_b = 2,\\[0.3em]
-      3/2, & \alpha_b = 4,\\[0.3em]
-      11/2, & \alpha_b = 8.
+      \frac{4^{\log_2 \alpha_b}+2}{12} ,& \alpha_b \ge 2.
     \end{cases}
   \]
-
   \item
   \[
-    \alpha_1 = \sqrt{n\sigma_1^2(\sigma_2^2+\sigma_b)} 
+    \alpha_1 = \left\lceil 10\sqrt{n\sigma_1^2(\sigma_2^2+\sigma_b)} \right\rceil
   \]
   \[
-    \alpha_s =  \sqrt{\sigma_2^2+\sigma_b} 
+    \alpha_s = \left\lceil 10\sqrt{\sigma_2^2+\sigma_b} \right\rceil
   \]
   \[
-    \alpha_e =  \sigma_1 
+    \alpha_e = \left\lceil 10\sigma_1 \right\rceil
   \]
 
 
@@ -100,7 +98,7 @@
   \[
     r=
     \begin{cases}
-      \left\lceil 2.75B_k\right\rceil, & \lambda=128,\\[0.5em]
+      \left\lceil 2.78B_k\right\rceil, & \lambda=128,\\[0.5em]
       \left\lceil 2.78B_k\right\rceil, & \lambda=256,\\[0.5em]
       \left\lceil 2.81B_k\right\rceil, & \lambda=512.
     \end{cases}
@@ -119,7 +117,7 @@ V_s = 2n (\frac{r}{\alpha_1})^4 + 2\ell n (\frac{r}{\alpha_s})^4 + mn(2(\frac{r}
     B_v= B_s = \sqrt{\mu_s + 6.13\sqrt{V_s}}.
   \]
 
-  \item {\zhfont 若 $2r/\alpha_h < 0.05$，则返回：$\alpha_h$ 太大，请调整。}
+  \item {\zhfont 若 $2r/\alpha_h < 0.05$或者$\alpha_h$ 不整除 $2(q-1)$，则返回：$\alpha_h$ 太大，请调整。}
   \item {\zhfont 若 $\alpha_h$ 不是 $2$ 的幂次，则返回：$\alpha_h$ 不是 $2$ 的幂次。}
 \end{enumerate}
 
@@ -133,7 +131,7 @@ V_s = 2n (\frac{r}{\alpha_1})^4 + 2\ell n (\frac{r}{\alpha_s})^4 + mn(2(\frac{r}
 \[
 \begin{aligned}
 \texttt{SIS\_UF\_para} ={}& \texttt{SISParameters}(mn,\ q,\ \texttt{length\_bound}=B_v, \\
-& (\ell+1+m)n,\ \texttt{norm}=2,\ \texttt{tag}=\texttt{None}).
+& (\ell+2+m)n,\ \texttt{norm}=2,\ \texttt{tag}=\texttt{None}).
 \end{aligned}
 \]
 \[

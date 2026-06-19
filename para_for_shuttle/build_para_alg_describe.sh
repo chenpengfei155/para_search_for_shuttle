@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEX_FILE="para_alg_describe.tex"
-PDF_FILE="para_alg_describe.pdf"
+TEX_FILE="para_alg_describe 参数搜索.tex"
+PDF_FILE="para_alg_describe 参数搜索.pdf"
 
 if command -v xelatex >/dev/null 2>&1; then
     LATEX_BIN="xelatex"

@@ -46,7 +46,7 @@ except Exception:
 
 
 R_SCALING = {
-    128: 2.75,
+    128: 2.78,
     256: 2.78,
     512: 2.81,
 }
@@ -248,9 +248,9 @@ def compute_parameters(
         raise ParameterValidationError("l和m必须为正整数")
     if alpha_h <= 0:
         raise ParameterValidationError("alpha_h必须为正整数")
-    if sigma_1 < 0.7:
+    if sigma_1 < 0.81:
         raise ParameterValidationError("sigma_1不合法，离散高斯中分布标准差太小")
-    if sigma_2 < 0.7:
+    if sigma_2 < 0.81:
         raise ParameterValidationError("sigma_2不合法，离散高斯中分布标准差太小")
     if not is_power_of_two(alpha_b):
         raise ParameterValidationError("alpha_b不合法，必须是2的幂次")
@@ -260,9 +260,9 @@ def compute_parameters(
         raise ParameterValidationError("q不合法，n/2不整除(q-1)，q不是NTT素数")
 
     sigma_b = compute_sigma_b(alpha_b)
-    alpha_1 = math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b))
-    alpha_s = math.sqrt(sigma_2**2 + sigma_b)
-    alpha_e = sigma_1
+    alpha_1 = math.ceil(10 * math.sqrt(n * sigma_1**2 * (sigma_2**2 + sigma_b)))
+    alpha_s = math.ceil(10 * math.sqrt(sigma_2**2 + sigma_b))
+    alpha_e = math.ceil(10 * sigma_1)
     bk = math.sqrt(
         alpha_1**2
         + alpha_s**2 * ell * n * sigma_1**2
@@ -292,7 +292,7 @@ def compute_parameters(
     bs = math.sqrt(mu_s + 6.13 * math.sqrt(v_s))
     bv = bs
 
-    if 2 * r / alpha_h < 0.05:
+    if 2 * r / alpha_h < 0.05 or (2 * (q - 1)) % alpha_h != 0:
         raise ParameterValidationError("alpha_h太大，请调整")
     if not is_power_of_two(alpha_h):
         raise ParameterValidationError("alpha_h不是2的幂次")
@@ -311,7 +311,7 @@ def compute_parameters(
         n=m * n,
         q=q,
         length_bound=bv,
-        m=(ell + 1 + m) * n,
+        m=(ell + 2 + m) * n,
         norm=2,
         tag=None,
     )
