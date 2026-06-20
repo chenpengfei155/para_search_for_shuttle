@@ -365,9 +365,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Update six_screenshot_parameter_results.xlsx with para_alg_impl.py results.")
     parser.add_argument("--xlsx", type=Path, default=Path("six_screenshot_parameter_results.xlsx"))
     parser.add_argument("--workers", type=int, default=min(32, os.cpu_count() or 1))
+    parser.add_argument("--sheet", help="Only update the worksheet with this exact name.")
     args = parser.parse_args()
 
     tasks, sheet_roots, sheets = collect_tasks(args.xlsx)
+    if args.sheet:
+        selected_paths = {path for name, path in sheets if name == args.sheet}
+        if not selected_paths:
+            raise RuntimeError(f"worksheet not found: {args.sheet}")
+        tasks = [task for task in tasks if task.sheet_path in selected_paths]
+        sheet_roots = {path: root for path, root in sheet_roots.items() if path in selected_paths}
+        sheets = [(name, path) for name, path in sheets if path in selected_paths]
+
     unique_params = sorted({task.params for task in tasks})
     workers = max(1, min(args.workers, os.cpu_count() or 1))
     print(f"rows={len(tasks)} unique_parameter_sets={len(unique_params)} workers={workers}")

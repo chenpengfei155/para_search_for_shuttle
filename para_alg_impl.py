@@ -282,7 +282,7 @@ def compute_parameters(
         n * (r / alpha_1) ** 2
         + ell * n * (r / alpha_s) ** 2
         + m * n * (r / alpha_e) ** 2
-        + m * alpha_h**2 / 48
+        + m *n* alpha_h**2 / 48
     )
     v_s = (
         2 * n * (r / alpha_1) ** 4
